@@ -14,7 +14,7 @@ export default async function TaskEditPage({
   const query = await searchParams;
   const [task, projects] = await Promise.all([getTaskDetail(id), getProjectOptions()]);
   if (!task) notFound();
-  const fallback = task.projectId ? `/projects/${task.projectId}#tasks` : "/tasks";
+  const fallback = task.projectId ? `/projects/${task.projectId}?tab=tasks` : "/tasks";
   const returnTo = query.return_to?.startsWith("/") && !query.return_to.startsWith("//") ? query.return_to : fallback;
 
   return <>

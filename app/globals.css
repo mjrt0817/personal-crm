@@ -254,3 +254,23 @@ button.task-check.done { background:var(--success); }
   .project-mobile-quick.mobile-only { display:flex; gap:7px; }
   .project-mobile-quick .button { padding:9px 7px; font-size:12px; }
 }
+
+/* Ver.1.7: 案件詳細タブ切替・Drive自動同期 */
+.project-tab-shell { margin-top:18px; }
+.project-tabs { display:flex; gap:4px; overflow-x:auto; scrollbar-width:thin; padding:0 2px; border-bottom:1px solid var(--line); background:transparent; }
+.project-tab { appearance:none; border:0; border-bottom:3px solid transparent; background:transparent; color:var(--muted); padding:12px 14px 10px; display:inline-flex; align-items:center; gap:7px; white-space:nowrap; font-weight:700; cursor:pointer; }
+.project-tab:hover { color:var(--text); background:rgba(255,255,255,.55); }
+.project-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.project-tab-count { min-width:20px; height:20px; padding:0 6px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; background:var(--surface-2); border:1px solid var(--line); color:var(--muted); font-size:11px; }
+.project-tab.active .project-tab-count { background:var(--accent-soft); border-color:#c9d9ff; color:var(--accent); }
+.project-tab-panel { margin-top:14px; }
+.project-tab-panel > .card { min-height:220px; }
+.drive-auto-note { margin:-2px 0 12px; padding:9px 11px; border-radius:9px; background:var(--surface-2); border:1px solid var(--line); }
+
+@media (max-width:760px) {
+  .project-tab-shell { margin-top:14px; }
+  .project-tabs { position:sticky; top:58px; z-index:9; margin:0 -16px; padding:0 16px; background:rgba(245,247,250,.96); backdrop-filter:blur(8px); }
+  .project-tab { padding:11px 11px 9px; font-size:13px; }
+  .project-tab-panel { margin-top:12px; }
+  .project-tab-panel > .card { min-height:0; }
+}

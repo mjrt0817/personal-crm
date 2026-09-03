@@ -254,7 +254,7 @@ export async function createProjectLink(formData: FormData) {
   });
   if (error) throw new Error(error.message);
   invalidateLinkMutation(projectId);
-  redirect(`/projects/${projectId}#links`);
+  redirect(`/projects/${projectId}?tab=links`);
 }
 
 export async function updateProjectLink(formData: FormData) {
@@ -300,7 +300,7 @@ export async function updateProjectLink(formData: FormData) {
   }).eq("id", id).eq("project_id", projectId);
   if (error) throw new Error(error.message);
   invalidateLinkMutation(projectId);
-  redirect(returnTarget(formData, `/projects/${projectId}#links`));
+  redirect(returnTarget(formData, `/projects/${projectId}?tab=links`));
 }
 
 export async function deleteProjectLink(formData: FormData) {
@@ -311,7 +311,7 @@ export async function deleteProjectLink(formData: FormData) {
   const { error } = await supabase.from("project_links").delete().eq("id", id);
   if (error) throw new Error(error.message);
   invalidateLinkMutation(projectId);
-  redirect(`/projects/${projectId}#links`);
+  redirect(`/projects/${projectId}?tab=links`);
 }
 
 export async function createTask(formData: FormData) {
@@ -333,14 +333,14 @@ export async function createTask(formData: FormData) {
   });
   if (error) throw new Error(error.message);
   invalidateTaskMutation(projectId);
-  redirect(projectId ? `/projects/${projectId}#tasks` : "/tasks");
+  redirect(projectId ? `/projects/${projectId}?tab=tasks` : "/tasks");
 }
 
 export async function updateTask(formData: FormData) {
   const id = required(formData, "id", "タスクID");
   const projectId = optional(formData, "project_id");
   const oldProjectId = optional(formData, "old_project_id");
-  if (demoMode) demoReturn(formData, returnTarget(formData, projectId ? `/projects/${projectId}#tasks` : "/tasks"));
+  if (demoMode) demoReturn(formData, returnTarget(formData, projectId ? `/projects/${projectId}?tab=tasks` : "/tasks"));
   const { supabase } = await authed();
   const companyId = await resolveCompanyIdForProject(supabase, projectId, optional(formData, "company_id"));
   const status = text(formData, "status") || "todo";
@@ -359,7 +359,7 @@ export async function updateTask(formData: FormData) {
   if (error) throw new Error(error.message);
   invalidateTaskMutation(oldProjectId);
   if (projectId && projectId !== oldProjectId) invalidateTaskMutation(projectId);
-  redirect(returnTarget(formData, projectId ? `/projects/${projectId}#tasks` : "/tasks"));
+  redirect(returnTarget(formData, projectId ? `/projects/${projectId}?tab=tasks` : "/tasks"));
 }
 
 export async function setTaskStatus(formData: FormData) {
@@ -374,7 +374,7 @@ export async function setTaskStatus(formData: FormData) {
   }).eq("id", id);
   if (error) throw new Error(error.message);
   invalidateTaskMutation(projectId);
-  redirect(projectId ? `/projects/${projectId}#tasks` : "/tasks");
+  redirect(projectId ? `/projects/${projectId}?tab=tasks` : "/tasks");
 }
 
 export async function setTaskStatusQuick(id: string, status: "todo" | "completed", projectId?: string) {
@@ -397,7 +397,7 @@ export async function deleteTask(formData: FormData) {
   const { error } = await supabase.from("tasks").delete().eq("id", id);
   if (error) throw new Error(error.message);
   invalidateTaskMutation(projectId);
-  redirect(projectId ? `/projects/${projectId}#tasks` : "/tasks");
+  redirect(projectId ? `/projects/${projectId}?tab=tasks` : "/tasks");
 }
 
 export async function createActivity(formData: FormData) {
@@ -430,14 +430,14 @@ export async function createActivity(formData: FormData) {
   }
 
   invalidateActivityMutation(projectId, Boolean(projectId && checkbox(formData, "update_project_next_action") && nextAction));
-  redirect(projectId ? `/projects/${projectId}#activities` : "/dashboard");
+  redirect(projectId ? `/projects/${projectId}?tab=activities` : "/dashboard");
 }
 
 export async function updateActivity(formData: FormData) {
   const id = required(formData, "id", "活動ID");
   const projectId = optional(formData, "project_id");
   const oldProjectId = optional(formData, "old_project_id");
-  if (demoMode) demoReturn(formData, returnTarget(formData, projectId ? `/projects/${projectId}#activities` : "/dashboard"));
+  if (demoMode) demoReturn(formData, returnTarget(formData, projectId ? `/projects/${projectId}?tab=activities` : "/dashboard"));
   const { supabase } = await authed();
   const companyId = required(formData, "company_id", "取引先");
   const nextAction = optional(formData, "next_action");
@@ -462,7 +462,7 @@ export async function updateActivity(formData: FormData) {
   invalidateActivityMutation(oldProjectId, false);
   if (projectId && projectId !== oldProjectId) invalidateActivityMutation(projectId, updateProject);
   else if (projectId) invalidateActivityMutation(projectId, updateProject);
-  redirect(returnTarget(formData, projectId ? `/projects/${projectId}#activities` : "/dashboard"));
+  redirect(returnTarget(formData, projectId ? `/projects/${projectId}?tab=activities` : "/dashboard"));
 }
 
 export async function deleteActivity(formData: FormData) {
@@ -473,7 +473,7 @@ export async function deleteActivity(formData: FormData) {
   const { error } = await supabase.from("activities").delete().eq("id", id);
   if (error) throw new Error(error.message);
   invalidateActivityMutation(projectId);
-  redirect(projectId ? `/projects/${projectId}#activities` : "/dashboard");
+  redirect(projectId ? `/projects/${projectId}?tab=activities` : "/dashboard");
 }
 
 export async function createSchedule(formData: FormData) {
@@ -496,14 +496,14 @@ export async function createSchedule(formData: FormData) {
   if (error) throw new Error(error.message);
   await syncScheduleToGoogle(supabase, userId, data.id);
   invalidateScheduleMutation(projectId);
-  redirect(projectId ? `/projects/${projectId}#schedule` : "/schedule");
+  redirect(projectId ? `/projects/${projectId}?tab=schedule` : "/schedule");
 }
 
 export async function updateSchedule(formData: FormData) {
   const id = required(formData, "id", "予定ID");
   const projectId = optional(formData, "project_id");
   const oldProjectId = optional(formData, "old_project_id");
-  if (demoMode) demoReturn(formData, returnTarget(formData, projectId ? `/projects/${projectId}#schedule` : "/schedule"));
+  if (demoMode) demoReturn(formData, returnTarget(formData, projectId ? `/projects/${projectId}?tab=schedule` : "/schedule"));
   const { supabase, userId } = await authed();
   const companyId = await resolveCompanyIdForProject(supabase, projectId, optional(formData, "company_id"));
   const { error } = await supabase.from("schedules").update({
@@ -521,7 +521,7 @@ export async function updateSchedule(formData: FormData) {
   await syncScheduleToGoogle(supabase, userId, id);
   invalidateScheduleMutation(oldProjectId);
   if (projectId && projectId !== oldProjectId) invalidateScheduleMutation(projectId);
-  redirect(returnTarget(formData, projectId ? `/projects/${projectId}#schedule` : "/schedule"));
+  redirect(returnTarget(formData, projectId ? `/projects/${projectId}?tab=schedule` : "/schedule"));
 }
 
 export async function deleteSchedule(formData: FormData) {
@@ -533,7 +533,7 @@ export async function deleteSchedule(formData: FormData) {
   const { error } = await supabase.from("schedules").delete().eq("id", id);
   if (error) throw new Error(error.message);
   invalidateScheduleMutation(projectId);
-  redirect(projectId ? `/projects/${projectId}#schedule` : "/schedule");
+  redirect(projectId ? `/projects/${projectId}?tab=schedule` : "/schedule");
 }
 
 export async function syncScheduleNow(formData: FormData) {
@@ -543,7 +543,7 @@ export async function syncScheduleNow(formData: FormData) {
   const { supabase, userId } = await authed();
   await syncScheduleToGoogle(supabase, userId, id);
   invalidateScheduleMutation(projectId);
-  redirect(projectId ? `/projects/${projectId}#schedule` : "/schedule");
+  redirect(projectId ? `/projects/${projectId}?tab=schedule` : "/schedule");
 }
 
 export async function importGoogleCalendar() {

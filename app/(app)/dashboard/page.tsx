@@ -107,7 +107,7 @@ export default async function DashboardPage() {
                   <div className="small muted">{file.companyName ?? "—"}{file.projectName ? ` / ${file.projectName}` : ""}</div>
                   {file.modifiedAt && <div className="small muted">更新：{formatDateTime(file.modifiedAt)}</div>}
                 </div>
-                {file.projectId && <Link className="button" href={`/projects/${file.projectId}#drive`}>案件へ</Link>}
+                {file.projectId && <Link className="button" href={`/projects/${file.projectId}?tab=drive`}>案件へ</Link>}
               </div>
             )) : <div className="empty">同期済みのDriveファイルはまだありません。</div>}
           </div>
