@@ -1,0 +1,3 @@
+import type { ProjectLink } from "@/lib/types";
+const icon: Record<string,string> = { teams:"💬", google_drive:"📁", google_docs:"📄", google_sheets:"📊", google_slides:"📽️", website:"🌐", management_system:"🛠️", other:"🔗" };
+export default function QuickLinks({ links }: { links: ProjectLink[] }) { const pinned=links.filter(x=>x.pinned).sort((a,b)=>(a.pinOrder??99)-(b.pinOrder??99)).slice(0,4); if(!pinned.length) return null; return <div className="quick-links">{pinned.map(link=><a className="quick-link" key={link.id} href={link.url} target="_blank" rel="noreferrer">{icon[link.linkType]??"🔗"} <strong>{link.name}</strong> ↗</a>)}</div>; }

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>業務管理 Ver.1 Prototype</title>
+<style>
+:root{--bg:#f5f7fa;--surface:#fff;--text:#172033;--muted:#667085;--line:#e6eaf0;--accent:#2457d6;--soft:#edf3ff;--danger:#b42318;--warning:#b54708;--success:#067647;--r:14px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,"Yu Gothic",Meiryo,sans-serif}button,a{font:inherit}button{cursor:pointer}
+.shell{min-height:100vh;display:grid;grid-template-columns:220px 1fr}.side{background:#172033;color:#fff;padding:22px 14px}.brand{font-weight:800;font-size:18px;padding:0 12px 20px}.nav button{width:100%;border:0;background:none;color:#d8deeb;text-align:left;padding:11px 12px;border-radius:10px;margin:2px 0}.nav button:hover,.nav button.active{background:rgba(255,255,255,.1);color:#fff}
+.main{min-width:0}.top{height:64px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 28px;gap:12px}.search{flex:1;max-width:560px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--muted)}.btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 12px}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.content{padding:28px;max-width:1400px;margin:auto}.head{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;margin-bottom:22px}.head h1{margin:0 0 6px;font-size:27px}.muted{color:var(--muted)}.small{font-size:13px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.metric,.card,.hero{background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:0 1px 3px rgba(16,24,40,.07)}.metric{padding:18px}.metric .v{font-size:28px;font-weight:800;margin-top:7px}.two{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;margin-top:18px}.card{overflow:hidden}.ch{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.ch h2{font-size:16px;margin:0}.row{display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:1px solid var(--line)}.row:first-child{border-top:0}.grow{flex:1;min-width:0}.title{font-weight:700;margin-bottom:3px}.badge{display:inline-flex;border-radius:999px;padding:4px 8px;background:#f8fafc;border:1px solid var(--line);font-size:12px}.blue{background:var(--soft);color:var(--accent);border:0}.red{background:#fff1f0;color:var(--danger);border:0}.orange{background:#fff6ed;color:var(--warning);border:0}.green{background:#ecfdf3;color:var(--success);border:0}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line)}th{font-size:12px;color:var(--muted);background:#f8fafc}.linklike{color:var(--accent);font-weight:700;cursor:pointer}
+.hero{padding:20px}.hero h1{font-size:26px;margin:4px 0 8px}.meta{display:flex;gap:8px;flex-wrap:wrap}.next{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}.box{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:14px}.box .label{font-size:12px;color:var(--muted);margin-bottom:5px}.box .value{font-weight:700}.quick{display:flex;gap:9px;flex-wrap:wrap;margin:18px 0}.ql{border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(16,24,40,.07);cursor:pointer}.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow:auto}.tab{padding:11px 13px;white-space:nowrap;color:var(--muted);cursor:pointer}.tab.active{color:var(--accent);border-bottom:2px solid var(--accent)}.detail{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}.body{padding:18px}.kv{display:grid;grid-template-columns:130px 1fr;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}.kv .k{color:var(--muted);font-size:13px}.timeline{border-left:2px solid var(--line);padding-left:18px;margin-left:5px}.event{margin:0 0 18px;position:relative}.event:before{content:"";position:absolute;width:10px;height:10px;border-radius:50%;background:var(--accent);left:-24px;top:4px}
+.screen{display:none}.screen.active{display:block}.mobile-nav{display:none}
+@media(max-width:900px){.shell{grid-template-columns:1fr}.side{display:none}.content{padding:18px 14px 84px}.metrics{grid-template-columns:repeat(2,1fr)}.two,.detail{grid-template-columns:1fr}.top{padding:0 14px}.mobile-nav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);z-index:20}.mobile-nav button{border:0;background:#fff;padding:10px 2px;font-size:11px;color:var(--muted)}.mobile-nav .plus{width:46px;height:46px;border-radius:50%;background:var(--accent);color:#fff;font-size:22px;margin:-17px auto 0}}
+@media(max-width:560px){.head h1{font-size:23px}.hero h1{font-size:22px}.next{grid-template-columns:1fr}.top .btn{display:none}.top .search{font-size:13px}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand">業務管理</div>
+    <div class="nav">
+      <button class="active" onclick="show('dashboard',this)">🏠 ホーム</button>
+      <button onclick="show('projects',this)">📁 案件</button>
+      <button onclick="show('tasks',this)">✅ タスク</button>
+      <button onclick="show('schedule',this)">📅 スケジュール</button>
+      <button onclick="show('companies',this)">🏢 取引先</button>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <div class="search">🔍 取引先・案件・担当者・活動を検索</div>
+      <button class="btn primary">＋ 新規</button>
+    </header>
+    <main class="content">
+
+      <section id="dashboard" class="screen active">
+        <div class="head"><div><h1>ホーム</h1><div class="muted">今日やることと、止まっている案件を先に確認します。</div></div><button class="btn primary">＋ クイック登録</button></div>
+        <div class="metrics">
+          <div class="metric"><div class="small muted">今日の予定</div><div class="v">2</div><div class="small muted">訪問・オンライン</div></div>
+          <div class="metric"><div class="small muted">未完了タスク</div><div class="v">4</div><div class="small muted">全案件</div></div>
+          <div class="metric"><div class="small muted">期限超過</div><div class="v">1</div><div class="small muted">要対応</div></div>
+          <div class="metric"><div class="small muted">対応中案件</div><div class="v">1</div><div class="small muted">進行中</div></div>
+        </div>
+        <div class="two">
+          <div class="card"><div class="ch"><h2>今日・直近の予定</h2></div>
+            <div class="row" onclick="openProject()"><div><b>9/15</b><div class="small muted">16:00–17:30</div></div><div class="grow"><div class="title">第2回訪問</div><div class="small muted">有限会社ロジステック</div></div></div>
+            <div class="row"><div><b>9/8</b><div class="small muted">10:00–11:00</div></div><div class="grow"><div class="title">Web改善打合せ</div><div class="small muted">株式会社サンプル</div></div></div>
+          </div>
+          <div class="card"><div class="ch"><h2>要確認</h2></div>
+            <div class="row"><span class="badge red">期限超過</span><div class="grow"><div class="title">○○社へ返信</div><div class="small muted">昨日が期限</div></div></div>
+            <div class="row"><span class="badge orange">待ち</span><div class="grow"><div class="title">現行Excel受領確認</div><div class="small muted">△△事務所</div></div></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:18px"><div class="ch"><h2>最近の案件</h2></div>
+          <div class="row" onclick="openProject()"><div class="grow"><div class="title linklike">DXコンシェルジュ支援</div><div class="small muted">有限会社ロジステック　・　次：第2回支援資料・ツール候補を整理</div></div><span class="badge blue">対応中</span></div>
+          <div class="row"><div class="grow"><div class="title">Webサイト改善</div><div class="small muted">株式会社サンプル　・　次：見積内容について確認</div></div><span class="badge">提案済</span></div>
+        </div>
+      </section>
+
+      <section id="projects" class="screen">
+        <div class="head"><div><h1>案件</h1><div class="muted">相談から完了まで、1つの案件として追跡します。</div></div><button class="btn primary">＋ 案件登録</button></div>
+        <div class="card" style="overflow:auto"><table><thead><tr><th>案件</th><th>取引先</th><th>状態</th><th>優先度</th><th>次回アクション</th><th>期限</th></tr></thead><tbody>
+          <tr><td class="linklike" onclick="openProject()">DXコンシェルジュ支援<div class="small muted">DX支援</div></td><td>有限会社ロジステック</td><td><span class="badge blue">対応中</span></td><td>高</td><td>第2回支援資料・ツール候補を整理</td><td>9/14</td></tr>
+          <tr><td>Webサイト改善<div class="small muted">Webサイト制作</div></td><td>株式会社サンプル</td><td><span class="badge">提案済</span></td><td>中</td><td>見積内容について確認</td><td>9/8</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section id="project" class="screen">
+        <div class="head"><button class="btn" onclick="show('projects')">← 案件一覧</button><button class="btn">編集</button></div>
+        <div class="hero">
+          <div class="small muted">有限会社ロジステック</div><h1>DXコンシェルジュ支援</h1>
+          <div class="meta"><span class="badge blue">対応中</span><span class="badge">優先度：高</span><span class="badge">DX支援</span></div>
+          <div class="next">
+            <div class="box"><div class="label">次回予定</div><div class="value">2026/09/15 16:00　第2回訪問</div></div>
+            <div class="box"><div class="label">次にやること</div><div class="value">第2回支援資料・ツール候補を整理</div><div class="small muted">期限：9/14</div></div>
+          </div>
+          <div class="quick">
+            <button class="ql" onclick="alert('実装版では登録済みTeams URLを新しいタブで開きます')">💬 <b>Teams報告</b> ↗</button>
+            <button class="ql">📁 <b>Google Drive</b> ↗</button>
+            <button class="ql">🌐 <b>先方Web</b> ↗</button>
+            <button class="ql">＋</button>
+          </div>
+          <div class="tabs"><div class="tab active">概要</div><div class="tab">活動</div><div class="tab">タスク</div><div class="tab">予定</div><div class="tab">ファイル</div><div class="tab">関連リンク</div><div class="tab">メモ</div></div>
+        </div>
+        <div class="detail">
+          <div class="card"><div class="ch"><h2>概要</h2></div><div class="body">
+            <div class="kv"><div class="k">取引先</div><div>有限会社ロジステック</div></div><div class="kv"><div class="k">主担当</div><div>祝 俊輔</div></div><div class="kv"><div class="k">開始日</div><div>2026/08/28</div></div><div class="kv"><div class="k">案件概要</div><div>DXコンシェルジュ全3回支援。課題整理、候補ツール比較、導入ロードマップ策定。</div></div>
+          </div></div>
+          <div class="card"><div class="ch"><h2>活動履歴</h2><button class="btn">＋ 活動</button></div><div class="body timeline">
+            <div class="event"><div class="small muted">2026/09/03　メール</div><div class="title">議事録送付</div><div>第1回打合せ議事録を送付。次回訪問日時を案内。</div></div>
+            <div class="event"><div class="small muted">2026/08/28　訪問</div><div class="title">初回ヒアリング</div><div>給与・勤怠、社内コミュニケーション、実費管理等の課題を整理。</div></div>
+          </div></div>
+        </div>
+        <div class="detail">
+          <div class="card"><div class="ch"><h2>タスク</h2><button class="btn">＋ タスク</button></div>
+            <div class="row"><div class="grow"><div class="title">第2回支援資料作成</div><div class="small muted">期限：9/14</div></div><span class="badge red">高</span></div>
+            <div class="row"><div class="grow"><div class="title">候補ツールの費用情報確認</div><div class="small muted">期限：9/10</div></div><span class="badge">中</span></div>
+          </div>
+          <div class="card"><div class="ch"><h2>関連リンク</h2><button class="btn">＋ URL</button></div>
+            <div class="row"><div class="grow"><div class="title">📌 Teams報告</div><div class="small muted">teams</div></div><button class="btn">開く ↗</button></div>
+            <div class="row"><div class="grow"><div class="title">📌 Google Drive</div><div class="small muted">google_drive</div></div><button class="btn">開く ↗</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tasks" class="screen"><div class="head"><div><h1>タスク</h1><div class="muted">案件に紐づく作業をまとめて確認します。</div></div><button class="btn primary">＋ タスク</button></div><div class="card">
+        <div class="row"><div class="grow"><div class="title">第2回支援資料作成</div><div class="small muted">ロジステック / DXコンシェルジュ支援</div></div><span class="badge blue">対応中</span><span class="badge red">高</span></div>
+        <div class="row"><div class="grow"><div class="title">現行Excel受領確認</div><div class="small muted">△△事務所</div></div><span class="badge orange">待ち</span></div>
+      </div></section>
+
+      <section id="schedule" class="screen"><div class="head"><div><h1>スケジュール</h1><div class="muted">Ver.2でGoogle Calendarと同期します。</div></div><button class="btn primary">＋ 予定</button></div><div class="card">
+        <div class="row" onclick="openProject()"><div><b>9/15</b><div class="small muted">16:00–17:30</div></div><div class="grow"><div class="title">第2回訪問</div><div class="small muted">有限会社ロジステック</div></div></div>
+        <div class="row"><div><b>9/8</b><div class="small muted">10:00–11:00</div></div><div class="grow"><div class="title">Web改善打合せ</div><div class="small muted">株式会社サンプル</div></div></div>
+      </div></section>
+
+      <section id="companies" class="screen"><div class="head"><div><h1>取引先</h1><div class="muted">取引先情報と進行中案件を確認します。</div></div><button class="btn primary">＋ 取引先</button></div><div class="card" style="overflow:auto"><table><thead><tr><th>取引先</th><th>業種</th><th>対応中案件</th><th>最終接触</th></tr></thead><tbody>
+        <tr><td><b>有限会社ロジステック</b></td><td>福祉</td><td>1</td><td>2026/09/03</td></tr><tr><td><b>株式会社サンプル</b></td><td>サービス</td><td>1</td><td>2026/09/01</td></tr>
+      </tbody></table></div></section>
+
+    </main>
+  </div>
+</div>
+<nav class="mobile-nav"><button onclick="show('dashboard')">🏠<br>ホーム</button><button onclick="show('projects')">📁<br>案件</button><button><span class="plus">＋</span></button><button onclick="show('tasks')">✅<br>タスク</button><button onclick="show('schedule')">☰<br>その他</button></nav>
+<script>
+function show(id,btn){
+ document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+ document.getElementById(id).classList.add('active');
+ document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
+ if(btn)btn.classList.add('active');
+ window.scrollTo(0,0);
+}
+function openProject(){show('project')}
+</script>
+</body>
+</html>

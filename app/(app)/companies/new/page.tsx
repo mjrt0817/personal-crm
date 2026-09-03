@@ -1,0 +1,1 @@
+import CompanyForm from '@/components/CompanyForm'; import { createCompany } from '@/lib/actions'; export default function Page(){return <><div className="page-head"><div><h1>取引先登録</h1><p className="muted">基本情報を登録します。</p></div></div><CompanyForm action={createCompany}/></>}
