@@ -24,7 +24,7 @@ export default async function DashboardPage() {
           <h1>ホーム</h1>
           <p className="muted">今日やること、止まっている案件、最近の資料をここから確認します。</p>
         </div>
-        <Link href="/projects/new" className="button primary">＋ 案件登録</Link>
+        <div className="row-action-group"><Link href="/focus" className="button soft">🎯 優先アクション</Link><Link href="/projects/new" className="button primary">＋ 案件登録</Link></div>
       </div>
 
       {calendar.connected && (
@@ -41,6 +41,16 @@ export default async function DashboardPage() {
         <MetricCard label="期限超過" value={snapshot.overdueTaskCount} note="要対応"/>
         <MetricCard label="回答待ちフォロー" value={snapshot.waitingFollowupCount} note="3日以上・指定日到来"/>
       </div>
+
+      <section className="card focus-callout">
+        <div className="card-body focus-callout-body">
+          <div>
+            <div className="focus-callout-title">🎯 今日・今週の優先アクションを自動整理</div>
+            <div className="small muted">期限超過、回答待ち、次回アクション、予定準備、未処理Gmail、放置案件を横断して優先順に並べます。</div>
+          </div>
+          <Link href="/focus" className="button primary">優先アクションを見る →</Link>
+        </div>
+      </section>
 
       <div className="two-col">
         <section className="card">

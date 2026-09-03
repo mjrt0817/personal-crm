@@ -324,3 +324,25 @@ button.task-check.done { background:var(--success); }
   .task-row > .badge, .task-row > .small { margin-left:30px; }
   .followup-button { margin-left:30px; }
 }
+
+/* Ver.2.1: 優先アクションセンター */
+.focus-callout { margin-top:18px; border-color:#cdd9f5; background:linear-gradient(120deg,#fff,#f4f7ff); }
+.focus-callout-body { display:flex; align-items:center; justify-content:space-between; gap:18px; }
+.focus-callout-title { font-size:16px; font-weight:800; margin-bottom:5px; }
+.action-metrics { margin-bottom:18px; }
+.action-filter-chips { margin:0 0 14px; }
+.action-center-note { margin-top:4px; }
+.action-candidate-row { align-items:flex-start; }
+.action-candidate-row > .badge { margin-top:2px; }
+.action-reason { margin-top:4px; line-height:1.45; }
+.action-context { margin-top:5px; }
+.action-candidate-row.compact { padding-top:11px; padding-bottom:11px; }
+.action-logic-note { margin-top:12px; padding:0 4px; }
+@media (max-width:760px) {
+  .focus-callout-body { align-items:stretch; flex-direction:column; }
+  .focus-callout-body .button { width:100%; }
+  .action-candidate-row { flex-wrap:wrap; }
+  .action-candidate-row > .badge { flex:0 0 auto; }
+  .action-candidate-row > .grow { flex-basis:calc(100% - 110px); }
+  .action-candidate-row > .button { margin-left:auto; }
+}
