@@ -47,6 +47,8 @@ export default async function ProjectDetailPage({
         {query.gmail === "synced" && <div className="notice success-notice" style={{ marginBottom: 14 }}>Gmailを同期しました。{query.count ? ` ${query.count}件を確認しました。` : ""}</div>}
         {query.gmail === "added" && <div className="notice success-notice" style={{ marginBottom: 14 }}>メールを活動履歴へ追加しました。</div>}
         {query.gmail === "already_added" && <div className="notice" style={{ marginBottom: 14 }}>このメールはすでに活動履歴へ追加されています。</div>}
+        {query.gmail === "task_added" && <div className="notice success-notice" style={{ marginBottom: 14 }}>メールからタスクを作成しました。</div>}
+        {query.gmail === "task_already_added" && <div className="notice" style={{ marginBottom: 14 }}>このメールはすでにタスク化されています。</div>}
         {query.gmail === "error" && <div className="notice error-notice" style={{ marginBottom: 14 }}>Gmail同期に失敗しました。{query.message ? ` ${query.message}` : ""}</div>}
         <ProjectGmailPanel projectId={id} summary={gmail}/>
         <div className="timeline">

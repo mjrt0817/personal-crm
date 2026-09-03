@@ -647,6 +647,27 @@ export async function createContact(formData: FormData) {
   redirect(`/companies/${companyId}#contacts`);
 }
 
+export async function updateContact(formData: FormData) {
+  const id = required(formData, "id", "担当者ID");
+  const companyId = required(formData, "company_id", "取引先ID");
+  if (demoMode) demoReturn(formData, `/companies/${companyId}#contacts`);
+  const { supabase } = await authed();
+  const { error } = await supabase.from("contacts").update({
+    name: required(formData, "name", "氏名"),
+    department: optional(formData, "department"),
+    position: optional(formData, "position"),
+    email: optional(formData, "email"),
+    phone: optional(formData, "phone"),
+    mobile: optional(formData, "mobile"),
+    memo: optional(formData, "memo")
+  }).eq("id", id).eq("company_id", companyId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/companies/${companyId}`);
+  revalidatePath("/projects");
+  revalidatePath("/search");
+  redirect(`/companies/${companyId}#contacts`);
+}
+
 export async function deleteContact(formData: FormData) {
   const id = required(formData, "id", "担当者ID");
   const companyId = required(formData, "company_id", "取引先ID");
@@ -726,3 +747,51 @@ export async function createActivityFromGmail(formData: FormData) {
   invalidateActivityMutation(projectId);
   redirect(`/projects/${projectId}?tab=activities&gmail=added`);
 }
+
+export async function createTaskFromGmail(formData: FormData) {
+  const projectId = required(formData, "project_id", "案件ID");
+  const gmailRowId = required(formData, "gmail_row_id", "GmailメッセージID");
+  if (demoMode) demoReturn(formData, `/projects/${projectId}?tab=activities`);
+  const { supabase, userId } = await authed();
+
+  const { data: mail, error: mailError } = await supabase
+    .from("gmail_messages")
+    .select("id,company_id,project_id,gmail_message_id,subject,from_text,to_text,sent_at,snippet,gmail_url,is_outgoing,task_id")
+    .eq("id", gmailRowId)
+    .eq("project_id", projectId)
+    .single();
+  if (mailError) throw new Error(mailError.message);
+
+  if (mail.task_id) redirect(`/projects/${projectId}?tab=activities&gmail=task_already_added`);
+
+  const statusRaw = text(formData, "status");
+  const status = ["todo", "doing", "waiting"].includes(statusRaw) ? statusRaw : (mail.is_outgoing ? "waiting" : "todo");
+
+  const { data: task, error: taskError } = await supabase.from("tasks").insert({
+    user_id: userId,
+    company_id: mail.company_id,
+    project_id: projectId,
+    title: required(formData, "title", "タスク名"),
+    description: optional(formData, "description"),
+    status,
+    priority: text(formData, "priority") || "medium",
+    start_date: optional(formData, "start_date"),
+    due_at: jstDateTimeOrNull(formData, "due_at"),
+    memo: optional(formData, "memo"),
+    source: "gmail",
+    source_external_id: mail.gmail_message_id
+  }).select("id").single();
+
+  if (taskError) {
+    if (taskError.code === "23505") redirect(`/projects/${projectId}?tab=activities&gmail=task_already_added`);
+    throw new Error(taskError.message);
+  }
+
+  const { error: updateError } = await supabase.from("gmail_messages").update({ task_id: task.id }).eq("id", gmailRowId);
+  if (updateError) throw new Error(updateError.message);
+
+  invalidateTaskMutation(projectId);
+  revalidatePath(`/projects/${projectId}/mail`);
+  redirect(`/projects/${projectId}?tab=activities&gmail=task_added`);
+}
+

@@ -185,6 +185,19 @@ export type CompanyDetail = {
   projects: Array<{ id: string; name: string; status: ProjectStatus; nextAction?: string }>;
 };
 
+export type ContactDetail = {
+  id: string;
+  companyId: string;
+  companyName: string;
+  name: string;
+  department?: string;
+  position?: string;
+  email?: string;
+  phone?: string;
+  mobile?: string;
+  memo?: string;
+};
+
 export type FormOptions = {
   companies: Array<{ id: string; name: string }>;
   contacts: Array<{ id: string; companyId: string; name: string }>;
@@ -206,6 +219,7 @@ export type GmailMessageItem = {
   gmailUrl: string;
   outgoing: boolean;
   activityId?: string;
+  taskId?: string;
 };
 
 export type ProjectGmailSummary = {

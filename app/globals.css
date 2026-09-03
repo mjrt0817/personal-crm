@@ -298,3 +298,11 @@ button.task-check.done { background:var(--success); }
   .gmail-row-actions > * { flex:1; }
   .gmail-row-actions .button, .gmail-row-actions .badge { width:100%; }
 }
+
+/* Ver.1.9: 担当者編集・Gmail→タスク */
+.gmail-task-source { max-width: 860px; }
+.task-from-mail { border-color:#d7def0; background:#fff; }
+.task-from-mail:hover { border-color:#b8c7ea; background:var(--accent-soft); color:var(--accent); }
+@media (max-width:720px) {
+  .gmail-row-actions .task-from-mail { flex-basis:100%; }
+}

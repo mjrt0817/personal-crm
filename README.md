@@ -1,178 +1,156 @@
-# Personal CRM Ver.1.8
+# Personal CRM Ver.1.9
 
 個人用 SFA + CRM + 案件・タスク・スケジュール管理ツールです。
 
-Ver.1.8では **Gmail案件連携** を追加しました。取引先・担当者に登録されているメールアドレスを使ってGmailから関連メールを検索し、案件の「活動」画面から確認できます。必要なメールだけを1クリックで活動履歴へ追加できます。
+Ver.1.9では、**登録済み担当者の編集**と、**Gmailからのタスク化**を追加しました。
 
-## Ver.1.8の主な追加・改善
+## Ver.1.9の主な追加・改善
 
-### 1. 案件ごとのGmail関連メール
+### 1. 登録済み担当者を編集可能に
 
-案件詳細 → **活動** に「Gmail 関連メール」を追加しました。
+取引先詳細 → 担当者一覧に編集ボタン（✎）を追加しました。
 
-- 取引先の代表メール
-- 取引先に登録されている担当者メール
+編集可能項目：
 
-を対象に、Gmailの過去1年分から送受信メールを検索します。
+- 氏名
+- 部署
+- 役職
+- メール
+- 電話
+- 携帯電話
+- メモ
 
-初期設定では1回の同期につき最大30件を確認します。
+担当者のメールアドレスを修正した場合、次回のGmail同期から新しいメールアドレスが検索対象になります。
 
-### 2. Gmail本文全体は保存しない
+### 2. Gmailから「返信タスク」を作成
 
-Supabaseへ保存するのは以下の参照情報です。
+受信メールには **「返信タスクにする」** を表示します。
 
-- Gmail message / thread ID
-- 件名
-- 差出人
-- 宛先・CC
-- 送受信日時
-- Gmail APIのsnippet（短い本文プレビュー）
-- Gmailを開くURL
+押すとタスク作成画面へ移動し、以下を自動入力します。
 
-**メール本文全体・添付ファイルはSupabaseへ保存しません。**
+- タスク名：`返信：メール件名`
+- 状態：未着手
+- 開始日：今日
+- 内容：差出人・宛先・snippet・Gmailリンク
 
-### 3. メールを活動履歴へ追加
+期限・優先度等は保存前に自由に変更できます。
 
-関連メールから **「活動履歴に追加」** を押すと、次の内容でCRMの活動履歴を作成します。
+### 3. Gmailから「回答待ち」を作成
 
-- 種別：メール
-- 日時：メール日時
-- 件名：メール件名
-- 内容：送受信情報＋snippet＋Gmailリンク
+送信メールには **「回答待ちにする」** を表示します。
 
-同じメールを二重で活動登録しないための重複防止も入れています。
+初期値：
 
-### 4. Gmailを直接開く
+- タスク名：`回答待ち：メール件名`
+- 状態：待ち
+- 開始日：今日
 
-各メールの **「Gmail ↗」** から元メールへ移動できます。
+これにより、メール送信後の「返事が来たか確認する案件」をCRMの待ちタスクとして管理できます。
 
-活動タブでは直近8件、**「すべて表示」** では同期済みメールを最大100件表示します。
+### 4. 二重タスク化を防止
+
+1つのGmailメッセージから同じタスクを重複作成しないよう、Gmailメッセージとタスクを紐付けます。
+
+タスク化済みのメールでは「タスク編集」に表示が変わり、登録済みタスクを直接編集できます。
+
+活動履歴への追加とタスク化は別機能です。必要に応じて同じメールを、
+
+- 活動履歴として記録
+- 次の行動としてタスク化
+
+の両方に利用できます。
 
 ---
 
-# Ver.1.7からの更新手順
+# Ver.1.8からの更新手順
 
-## 1. Supabase migration
+## 1. Supabase migrationを実行
 
-Supabase → **SQL Editor → New query** で、以下を全文実行してください。
-
-```text
-supabase/migrations/005_gmail_project_integration.sql
-```
-
-既存の取引先・案件・活動データは削除されません。
-
-追加される主なDB要素：
+**GitHubへVer.1.9を反映する前に**、Supabase → SQL Editor → New query で以下を全文実行してください。
 
 ```text
-project_gmail_syncs
-gmail_messages
-activities.source
-activities.source_external_id
+supabase/migrations/006_gmail_task_and_contact_edit.sql
 ```
 
-## 2. Google CloudでGmail APIを有効化
+既存データは削除されません。
 
-既存のPersonal CRM用Google Cloud Projectで、API Libraryから
-
-**Gmail API**
-
-を追加して **Enable / 有効化** してください。
-
-Calendar API・Drive APIと同じGoogle Cloud Projectを使用します。
-
-## 3. Google Auth PlatformへGmail scopeを追加
-
-Google Auth Platform → **Data Access → Add or Remove Scopes** で、以下を追加します。
+追加される主なDB項目：
 
 ```text
-https://www.googleapis.com/auth/gmail.readonly
+tasks.source
+tasks.source_external_id
+gmail_messages.task_id
 ```
 
-既存の以下は削除しません。
+担当者編集については既存の `contacts` テーブルをそのまま利用するため、専用のDB変更はありません。
 
-```text
-https://www.googleapis.com/auth/calendar.events
-https://www.googleapis.com/auth/drive.metadata.readonly
-```
+## 2. GitHubへVer.1.9を反映
 
-## 4. GitHubへVer.1.8を反映
-
-ZIPを展開し、`personal-crm-v1.8` フォルダの**中身**をGitHubリポジトリ直下へ上書きしてください。
+ZIPを展開し、`personal-crm-v1.9` フォルダの**中身**を現在のGitHubリポジトリ直下へ上書きしてください。
 
 mainへ反映するとVercelが自動デプロイします。
 
-## 5. Vercel
+## 3. 今回は追加設定なし
 
-新しい環境変数はありません。
+以下はすべて追加作業不要です。
 
-既存の以下をそのまま使用します。
+- Google Cloud
+- Google OAuth Scope
+- Supabase Authentication
+- Vercel Environment Variables
 
-```text
-NEXT_PUBLIC_DEMO_MODE=false
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
-ALLOWED_EMAILS=...
-GOOGLE_OAUTH_CLIENT_ID=...
-GOOGLE_OAUTH_CLIENT_SECRET=...
-GOOGLE_TOKEN_ENCRYPTION_KEY=...
-```
-
-## 6. Google Workspaceを再接続
-
-Gmail scopeを追加しただけでは、現在保存されているRefresh TokenにGmail権限は追加されません。
-
-CRM → **設定 → Google Workspace → Google Workspaceを再接続**
-
-を実行し、Googleの同意画面でGmailへの読み取り権限を許可してください。
-
-Google側の同意画面にGmail権限が出ない場合は、一度Googleアカウント側からPersonal CRMへのアクセス許可を削除してから再接続してください。
+既存のCalendar / Drive / Gmail連携設定をそのまま使用します。
 
 ---
 
 # 動作確認
 
-1. 取引先または担当者に実際のメールアドレスが入っていることを確認
-2. 案件詳細 → **活動** を開く
-3. **↻ Gmailを同期** を押す
-4. 関連する送受信メールが表示されることを確認
-5. **Gmail ↗** から元メールを開けることを確認
-6. 任意メールの **活動履歴に追加** を押す
-7. 下部の活動履歴にメール活動が追加されることを確認
-8. 同じメールに「活動登録済」と表示されることを確認
+## 担当者編集
 
-## 「Request had insufficient authentication scopes.」の場合
+1. 取引先を開く
+2. 担当者欄の **✎** を押す
+3. メール・役職等を変更
+4. 「変更を保存」
+5. 取引先詳細へ戻り内容が更新されていることを確認
 
-Gmail scopeを追加した後の再接続ができていません。
+## Gmail → 返信タスク
+
+1. 案件 → 活動
+2. Gmailを同期
+3. 受信メールの **返信タスクにする** を押す
+4. 内容を確認してタスクを作成
+5. 案件のタスク一覧に作成されることを確認
+6. 元メールのボタンが **タスク編集** に変わることを確認
+
+## Gmail → 回答待ち
+
+1. 送信済みメールの **回答待ちにする** を押す
+2. 状態が「待ち」で初期表示されることを確認
+3. 必要に応じて期限を設定して保存
+4. タスク一覧の「待ち」で管理できることを確認
+
+---
+
+# Ver.1.9の狙い
+
+メールは「やり取りの履歴」と「次に行うこと」の両方を含むため、CRMでは両者を分けて管理します。
 
 ```text
-設定 → Google Workspace → 再接続
+Gmail
+ ├─ 活動履歴に追加 → 過去に何をしたか
+ └─ タスク化       → 次に何をするか
 ```
 
-を実施してください。
-
-## 「Gmail API has not been used...」の場合
-
-Google CloudでGmail APIが有効化されていないか、OAuth Clientとは別のGoogle Cloud ProjectでAPIを有効化している可能性があります。
+特に、送信メールを「回答待ち」へ変換できることで、先方からの返信待ちを忘れにくくします。
 
 ---
 
-# Gmail OAuth scopeについて
+# 次の候補
 
-`gmail.readonly` はGoogle上の **Restricted（制限付き）scope** です。
+Ver.1.9確認後は、次の順を想定しています。
 
-このCRMは本人のみが利用する個人用ツールとして設計しています。個人利用・開発/テスト用途ではGoogleのVerification例外に該当する場合がありますが、今後このアプリを第三者へ提供する場合は、Google OAuth Verificationやセキュリティ評価の要否を改めて確認してください。
-
-またVer.1.8では、必要以上のメールデータを保存しないよう、本文全体や添付ファイルは取得・保存しない設計にしています。
-
----
-
-# 今後の候補
-
-Ver.1.8確認後は次の順を想定しています。
-
-1. Gmail検索条件・紐付け精度の改善
-2. Gmailから「返信が必要」「待ち」をタスク化
+1. 「待ち」タスクのフォローアップ強化（何日待っているか・督促候補）
+2. Gmail検索・案件紐付け精度の改善
 3. 見積・請求・売上管理
 4. AIによる案件要約・次回アクション提案
-5. 案件詳細UI（タブ方式を含む）の再調整
+5. 案件詳細UIの再検討

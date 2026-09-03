@@ -52,6 +52,11 @@ export default function ProjectGmailPanel({ projectId, summary, showAllLink = tr
                   <button className="button soft" type="submit">活動履歴に追加</button>
                 </form>
               )}
+              {mail.taskId ? (
+                <Link className="button soft" href={`/tasks/${mail.taskId}/edit?return_to=${encodeURIComponent(`/projects/${projectId}?tab=activities`)}`}>タスク編集</Link>
+              ) : (
+                <Link className="button task-from-mail" href={`/projects/${projectId}/mail/${mail.id}/task?mode=${mail.outgoing ? "waiting" : "reply"}`}>{mail.outgoing ? "回答待ちにする" : "返信タスクにする"}</Link>
+              )}
             </div>
           </div>
         )) : (

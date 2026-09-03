@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { companies as demoCompanies, projects as demoProjects, schedules as demoSchedules, tasks as demoTasks } from "@/lib/mock-data";
-import type { Activity, ActivityDetail, Company, CompanyDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail } from "@/lib/types";
+import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail } from "@/lib/types";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
@@ -521,6 +521,32 @@ export async function getCompanyBase(id: string): Promise<CompanyDetail | null> 
   };
 }
 
+export async function getContactDetail(id: string, companyId?: string): Promise<ContactDetail | null> {
+  if (demoMode) {
+    if (id === "contact-logistech") return { id, companyId: "c1", companyName: "有限会社ロジステック", name: "祝 俊輔", position: "代表取締役" };
+    return null;
+  }
+  const supabase = await createClient();
+  let query = supabase
+    .from("contacts")
+    .select("id,company_id,name,department,position,email,phone,mobile,memo,companies(name)")
+    .eq("id", id);
+  if (companyId) query = query.eq("company_id", companyId);
+  const { data, error } = await query.single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  const row = data as unknown as {
+    id:string; company_id:string; name:string; department:string|null; position:string|null; email:string|null; phone:string|null; mobile:string|null; memo:string|null; companies:{name:string}|null;
+  };
+  return {
+    id: row.id, companyId: row.company_id, companyName: row.companies?.name ?? "取引先", name: row.name,
+    department: row.department ?? undefined, position: row.position ?? undefined, email: row.email ?? undefined,
+    phone: row.phone ?? undefined, mobile: row.mobile ?? undefined, memo: row.memo ?? undefined
+  };
+}
+
 export async function getCompany(id: string): Promise<CompanyDetail | null> {
   if (demoMode) {
     const base = demoCompanies.find((x) => x.id === id);
@@ -693,6 +719,28 @@ export async function getDashboardSnapshot() {
   };
 }
 
+export async function getProjectGmailMessage(projectId: string, gmailRowId: string): Promise<GmailMessageItem | null> {
+  if (demoMode) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("gmail_messages")
+    .select("id,project_id,company_id,gmail_message_id,gmail_thread_id,subject,from_text,to_text,cc_text,sent_at,snippet,gmail_url,is_outgoing,activity_id,task_id")
+    .eq("id", gmailRowId)
+    .eq("project_id", projectId)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  return {
+    id: data.id, projectId: data.project_id, companyId: data.company_id ?? undefined,
+    gmailMessageId: data.gmail_message_id, gmailThreadId: data.gmail_thread_id, subject: data.subject || "(件名なし)",
+    fromText: data.from_text ?? undefined, toText: data.to_text ?? undefined, ccText: data.cc_text ?? undefined,
+    sentAt: data.sent_at ?? undefined, snippet: data.snippet ?? undefined, gmailUrl: data.gmail_url, outgoing: Boolean(data.is_outgoing),
+    activityId: data.activity_id ?? undefined, taskId: data.task_id ?? undefined
+  };
+}
+
 export async function getProjectGmailSummary(projectId: string, limit = 8): Promise<ProjectGmailSummary> {
   if (demoMode) return { messages: [] };
   const supabase = await createClient();
@@ -700,7 +748,7 @@ export async function getProjectGmailSummary(projectId: string, limit = 8): Prom
   const [messageResult, syncResult] = await Promise.all([
     supabase
       .from("gmail_messages")
-      .select("id,project_id,company_id,gmail_message_id,gmail_thread_id,subject,from_text,to_text,cc_text,sent_at,snippet,gmail_url,is_outgoing,activity_id")
+      .select("id,project_id,company_id,gmail_message_id,gmail_thread_id,subject,from_text,to_text,cc_text,sent_at,snippet,gmail_url,is_outgoing,activity_id,task_id")
       .eq("project_id", projectId)
       .order("sent_at", { ascending: false, nullsFirst: false })
       .limit(limit),
@@ -729,7 +777,8 @@ export async function getProjectGmailSummary(projectId: string, limit = 8): Prom
     snippet: m.snippet ?? undefined,
     gmailUrl: m.gmail_url,
     outgoing: Boolean(m.is_outgoing),
-    activityId: m.activity_id ?? undefined
+    activityId: m.activity_id ?? undefined,
+    taskId: m.task_id ?? undefined
   }));
 
   return {
