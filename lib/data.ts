@@ -288,7 +288,7 @@ export async function getScheduleDetail(id: string): Promise<ScheduleDetail | nu
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("schedules")
-    .select("id,company_id,project_id,title,schedule_type,start_at,end_at,all_day,location,description")
+    .select("id,company_id,project_id,title,schedule_type,start_at,end_at,all_day,location,description,google_event_id,google_sync_status,google_sync_error,google_html_link")
     .eq("id", id)
     .single();
   if (error) {
@@ -298,7 +298,11 @@ export async function getScheduleDetail(id: string): Promise<ScheduleDetail | nu
   return {
     id: data.id, companyId: data.company_id ?? undefined, projectId: data.project_id ?? undefined, title: data.title,
     scheduleType: data.schedule_type, startAt: toJstDateTimeLocal(data.start_at) ?? "", endAt: toJstDateTimeLocal(data.end_at),
-    allDay: data.all_day, location: data.location ?? undefined, description: data.description ?? undefined
+    allDay: data.all_day, location: data.location ?? undefined, description: data.description ?? undefined,
+    googleEventId: data.google_event_id ?? undefined,
+    googleSyncStatus: data.google_sync_status ?? "not_synced",
+    googleSyncError: data.google_sync_error ?? undefined,
+    googleHtmlLink: data.google_html_link ?? undefined
   };
 }
 
@@ -355,16 +359,16 @@ export async function getSchedules() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("schedules")
-    .select("id,start_at,end_at,title,project_id,all_day,location,description,companies(name)")
+    .select("id,start_at,end_at,title,project_id,all_day,location,description,google_event_id,google_sync_status,google_sync_error,google_html_link,companies(name)")
     .order("start_at", { ascending: true })
-    .limit(100);
+    .limit(200);
   if (error) throw new Error(error.message);
 
-  type RawSchedule = {id:string;start_at:string;end_at:string|null;title:string;project_id:string|null;all_day:boolean;location:string|null;description:string|null;companies:{name:string}|null};
+  type RawSchedule = {id:string;start_at:string;end_at:string|null;title:string;project_id:string|null;all_day:boolean;location:string|null;description:string|null;google_event_id:string|null;google_sync_status:string;google_sync_error:string|null;google_html_link:string|null;companies:{name:string}|null};
   return ((data ?? []) as unknown as RawSchedule[]).map((s) => {
     const start = new Date(s.start_at);
     const end = s.end_at ? new Date(s.end_at) : null;
-    const time = start.toLocaleTimeString("ja-JP",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit"})
+    const time = s.all_day ? "終日" : start.toLocaleTimeString("ja-JP",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit"})
       + (end ? `–${end.toLocaleTimeString("ja-JP",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit"})}` : "");
     return {
       id:s.id,
@@ -377,9 +381,35 @@ export async function getSchedules() {
       endAt:s.end_at,
       allDay:s.all_day,
       location:s.location ?? "",
-      description:s.description ?? ""
+      description:s.description ?? "",
+      googleEventId:s.google_event_id ?? "",
+      googleSyncStatus:s.google_sync_status ?? "not_synced",
+      googleSyncError:s.google_sync_error ?? "",
+      googleHtmlLink:s.google_html_link ?? ""
     };
   });
+}
+
+export async function getGoogleCalendarConnectionStatus() {
+  if (demoMode) return { connected: false };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("google_calendar_connections")
+    .select("google_email,connected_at,last_sync_at,last_sync_error")
+    .maybeSingle();
+  if (error) {
+    // Ver.1.4 migration前でも設定画面自体は表示できるようにする。
+    if (error.code === "42P01" || error.code === "PGRST205") return { connected: false };
+    throw new Error(error.message);
+  }
+  if (!data) return { connected: false };
+  return {
+    connected: true,
+    googleEmail: data.google_email ?? undefined,
+    connectedAt: data.connected_at ?? undefined,
+    lastSyncAt: data.last_sync_at ?? undefined,
+    lastSyncError: data.last_sync_error ?? undefined
+  };
 }
 
 export async function getFormOptions(): Promise<FormOptions> {

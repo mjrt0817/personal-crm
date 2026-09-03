@@ -202,3 +202,10 @@ button.task-check.done { background:var(--success); }
   .row-action-group { width:100%; justify-content:flex-end; padding-top:4px; }
   .row-action-group .button { padding:8px 10px; font-size:13px; }
 }
+
+/* Ver.1.4: Google Calendar sync */
+.success-notice { border-color:#a6e0c1; background:#ecfdf3; color:var(--success); }
+.error-notice { border-color:#f3b6b1; background:#fff1f0; color:var(--danger); }
+.sync-strip { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 14px; }
+.sync-meta { margin-top:7px; display:flex; gap:6px; flex-wrap:wrap; }
+@media (max-width:760px) { .sync-strip { align-items:flex-start; } }

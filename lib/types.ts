@@ -83,6 +83,18 @@ export type ScheduleDetail = {
   allDay: boolean;
   location?: string;
   description?: string;
+  googleEventId?: string;
+  googleSyncStatus?: "not_synced" | "synced" | "error";
+  googleSyncError?: string;
+  googleHtmlLink?: string;
+};
+
+export type GoogleCalendarConnectionStatus = {
+  connected: boolean;
+  googleEmail?: string;
+  connectedAt?: string;
+  lastSyncAt?: string;
+  lastSyncError?: string;
 };
 
 

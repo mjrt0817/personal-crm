@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { deleteScheduleFromGoogle, pullGoogleCalendar, revokeGoogleCalendarConnection, syncScheduleToGoogle } from "@/lib/google-calendar-server";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
@@ -474,7 +475,7 @@ export async function createSchedule(formData: FormData) {
   if (demoMode) demoReturn(formData, projectId ? `/projects/${projectId}` : "/schedule");
   const { supabase, userId } = await authed();
   const companyId = await resolveCompanyIdForProject(supabase, projectId, optional(formData, "company_id"));
-  const { error } = await supabase.from("schedules").insert({
+  const { data, error } = await supabase.from("schedules").insert({
     user_id: userId,
     company_id: companyId,
     project_id: projectId,
@@ -485,8 +486,9 @@ export async function createSchedule(formData: FormData) {
     all_day: checkbox(formData, "all_day"),
     location: optional(formData, "location"),
     description: optional(formData, "description")
-  });
+  }).select("id").single();
   if (error) throw new Error(error.message);
+  await syncScheduleToGoogle(supabase, userId, data.id);
   invalidateScheduleMutation(projectId);
   redirect(projectId ? `/projects/${projectId}#schedule` : "/schedule");
 }
@@ -496,7 +498,7 @@ export async function updateSchedule(formData: FormData) {
   const projectId = optional(formData, "project_id");
   const oldProjectId = optional(formData, "old_project_id");
   if (demoMode) demoReturn(formData, returnTarget(formData, projectId ? `/projects/${projectId}#schedule` : "/schedule"));
-  const { supabase } = await authed();
+  const { supabase, userId } = await authed();
   const companyId = await resolveCompanyIdForProject(supabase, projectId, optional(formData, "company_id"));
   const { error } = await supabase.from("schedules").update({
     company_id: companyId,
@@ -510,6 +512,7 @@ export async function updateSchedule(formData: FormData) {
     description: optional(formData, "description")
   }).eq("id", id);
   if (error) throw new Error(error.message);
+  await syncScheduleToGoogle(supabase, userId, id);
   invalidateScheduleMutation(oldProjectId);
   if (projectId && projectId !== oldProjectId) invalidateScheduleMutation(projectId);
   redirect(returnTarget(formData, projectId ? `/projects/${projectId}#schedule` : "/schedule"));
@@ -519,11 +522,55 @@ export async function deleteSchedule(formData: FormData) {
   const id = required(formData, "id", "予定ID");
   const projectId = optional(formData, "project_id");
   if (demoMode) demoReturn(formData, projectId ? `/projects/${projectId}` : "/schedule");
-  const { supabase } = await authed();
+  const { supabase, userId } = await authed();
+  await deleteScheduleFromGoogle(supabase, userId, id);
   const { error } = await supabase.from("schedules").delete().eq("id", id);
   if (error) throw new Error(error.message);
   invalidateScheduleMutation(projectId);
   redirect(projectId ? `/projects/${projectId}#schedule` : "/schedule");
+}
+
+export async function syncScheduleNow(formData: FormData) {
+  const id = required(formData, "id", "予定ID");
+  const projectId = optional(formData, "project_id");
+  if (demoMode) demoReturn(formData, projectId ? `/projects/${projectId}` : "/schedule");
+  const { supabase, userId } = await authed();
+  await syncScheduleToGoogle(supabase, userId, id);
+  invalidateScheduleMutation(projectId);
+  redirect(projectId ? `/projects/${projectId}#schedule` : "/schedule");
+}
+
+export async function importGoogleCalendar() {
+  if (demoMode) redirect("/schedule?demo_notice=1");
+  const { supabase, userId } = await authed();
+  let target = "/schedule?sync=error";
+  try {
+    const result = await pullGoogleCalendar(supabase, userId);
+    revalidatePath("/schedule");
+    revalidatePath("/dashboard");
+    revalidatePath("/projects");
+    const qs = new URLSearchParams({
+      sync: "ok",
+      updated: String(result.updated),
+      linked: String(result.linked),
+      deleted: String(result.deleted),
+      skipped: String(result.skipped)
+    });
+    target = `/schedule?${qs.toString()}`;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Google Calendar同期に失敗しました。";
+    target = `/schedule?sync=error&message=${encodeURIComponent(message)}`;
+  }
+  redirect(target);
+}
+
+export async function disconnectGoogleCalendar() {
+  if (demoMode) redirect("/settings?demo_notice=1");
+  const { supabase, userId } = await authed();
+  await revokeGoogleCalendarConnection(supabase, userId);
+  revalidatePath("/settings");
+  revalidatePath("/schedule");
+  redirect("/settings?calendar=disconnected");
 }
 
 export async function createContact(formData: FormData) {

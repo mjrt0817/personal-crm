@@ -1,166 +1,274 @@
-# Personal CRM / SFA Ver.1.3
+# Personal CRM Ver.1.4
 
-個人事業向けの取引先・案件・タスク・予定・活動履歴管理Webアプリです。
-案件詳細を業務のハブとし、Teams報告先やGoogle Drive等の関連URLを最大4件クイックリンクとして固定できます。
+個人用 SFA + CRM + 案件・タスク・スケジュール管理ツールです。
 
-## Ver.1.3 の主な改善
+Ver.1.4では Google Calendar との連携を次の段階へ進めています。
 
-- **登録済みタスクの編集機能を追加**
-  - タスク名
-  - 紐づく案件
-  - 状態
-  - 優先度
-  - 開始日
-  - 期限
-  - 内容
-  - メモ
-- **登録済み関連リンクの編集機能を追加**
-  - 表示名
-  - URL
-  - 種別
-  - メモ
-  - クイックリンクへのピン留めON/OFF
-- クイックリンクを「未ピン留め → ピン留め」に変更した際、空いている1〜4番を自動採番
-- ピン留めを解除した場合は `pin_order` を自動クリア
-- タスク一覧・案件詳細から直接編集画面へ移動可能
-- 関連リンク一覧から直接編集画面へ移動可能
-- 実運用上同様に修正需要が高いため、**活動履歴・予定の編集機能も追加**
-- 案件を選択してタスク・予定を登録/編集した場合、取引先IDを案件から自動補完するよう改善
-- 編集後は元の案件詳細タブへ戻る導線を維持
-- Ver.1.2のTokyoリージョン・速度改善を継続
-- **Google Calendar連携 Phase 1**：予定一覧からGoogle Calendarの新規予定画面を1クリックで開き、件名・日時・場所・内容を引き継ぐ
+- アプリで予定を新規登録 → Google Calendarへ自動作成
+- アプリで予定を編集 → Google Calendarへ自動更新
+- アプリで予定を削除 → Google Calendarからも自動削除
+- Google Calendar側で変更 → 「Googleから同期」でアプリへ反映
+- Google Calendar側で削除 → 「Googleから同期」でアプリ側も削除
+- Ver.1.3までの「Google Calendarへ登録」ボタンで作成した同名・同時刻予定は、同期時に自動で既存CRM予定と紐付け
+- CRMと無関係なGoogle Calendar予定は取り込まない
 
-## Ver.1.2 からの更新方法
+> 今回は「CRMに登録した予定」を双方向に保つ方式です。Google Calendarで新しく作った無関係な予定をCRMへ全部取り込む仕様にはしていません。個人・家族予定がCRMへ混ざることを防ぐためです。
 
-### 1. GitHubへVer.1.3のソースを上書き
+---
 
-リポジトリ直下の以下の構成を維持したまま、Ver.1.3の内容で上書きして `main` へpushしてください。
+## Ver.1.3からの更新手順
+
+### 1. GitHubへVer.1.4を上書き
+
+ZIPを展開し、`personal-crm-v1.4` フォルダの**中身**を現在のGitHubリポジトリ直下へ上書きしてください。
+
+VercelのGitHub連携により自動デプロイされますが、先に以下のSupabase / Google / Vercel設定も行ってください。
+
+---
+
+## 2. Supabase migrationを実行
+
+Supabase Dashboardで以下を開きます。
+
+`SQL Editor` → `New query`
+
+次のファイルを全文貼り付けて `Run` してください。
+
+`supabase/migrations/003_google_calendar_sync.sql`
+
+追加される主なもの：
+
+- `schedules.google_calendar_id`
+- `schedules.google_sync_status`
+- `schedules.google_sync_error`
+- `schedules.google_updated_at`
+- `schedules.google_html_link`
+- `google_calendar_connections` テーブル
+
+既存の案件・タスク・予定データは削除しません。
+
+---
+
+## 3. Google Calendar APIを有効化
+
+Google Cloud Consoleで、Personal CRM用に作成した既存Projectを開きます。
+
+1. 上部検索で `Google Calendar API` を検索
+2. `Google Calendar API` を開く
+3. `Enable` / `有効にする` を押す
+
+既に有効なら何もしなくて構いません。
+
+---
+
+## 4. Google Auth PlatformへCalendar scopeを追加
+
+Google Cloud Console → `Google Auth Platform` → `Data Access` を開きます。
+
+次のscopeを追加してください。
 
 ```text
-app/
-components/
-lib/
-public/
-supabase/
-package.json
-vercel.json
+https://www.googleapis.com/auth/calendar.events
 ```
 
-VercelのGitHub連携により自動デプロイされます。
+このscopeは、Google Calendarの予定を表示・追加・変更・削除するために使います。
 
-### 2. Supabase側のSQL追加作業は不要
+現在アプリがTestingの場合は、これまで通り自分のGoogleアカウントをTest userにしておけば構いません。
 
-Ver.1.3では既存テーブルの列構成を変更していないため、**Ver.1.2から更新する場合はSQL Migration不要**です。
+---
 
-Ver.1.2でまだ性能改善SQLを実行していない場合だけ、以下を一度実行してください。
+## 5. Vercelへ環境変数を3個追加
 
-`supabase/migrations/002_performance_indexes.sql`
+既存の4項目はそのまま残します。
 
-## 実装済み
-
-- Next.js App Router + TypeScript
-- Supabase PostgreSQL
-- Google OAuthログイン
-- 許可Googleアカウント制限（`ALLOWED_EMAILS`）
-- Supabase RLS（本人データのみ）
-- 初回ログイン時のプロフィール・案件種別自動作成
-- PC / スマホレスポンシブUI
-- PWA manifest
-- ダッシュボード
-- 取引先：一覧 / 詳細 / 新規 / 編集 / アーカイブ
-- 担当者：追加 / 削除
-- 案件：一覧 / 詳細 / 新規 / 編集 / アーカイブ
-- 案件関連URL：**追加 / 編集 / ピン留め / ピン解除 / 削除**
-- タスク：**追加 / 編集 / 完了切替 / 削除**
-- 活動履歴：**追加 / 編集 / 削除 / 次回アクションへ反映**
-- スケジュール：**追加 / 編集 / 削除 / Google Calendarへの1クリック登録**
-- 全体検索（取引先・案件）
-- デモデータ表示モード
-- Vercel Functions Tokyo（`hnd1`）固定
-- 案件詳細DBクエリ並列化
-- タスク完了Optimistic UI
-
-## タスク編集
-
-タスク一覧または案件詳細のタスク行にある「✎」から編集できます。
-
-案件詳細から編集した場合は、保存後に元の案件詳細のタスク位置へ戻ります。
-
-## 関連リンク編集
-
-案件詳細 > 関連リンクの「✎」から編集できます。
-
-ピン留めを変更した場合：
-
-- ON：空いているクイックリンク位置（1〜4）を自動使用
-- OFF：ピン表示から外し、関連リンク一覧には残す
-- すでに4件ピン留め済みの場合：5件目は保存せずエラー
-
-## Google Calendar連携 Phase 1
-
-スケジュール一覧の `Google Calendar ↗` から、登録済み予定の情報をGoogle Calendarの予定作成画面へ渡せます。
-
-現段階ではGoogle Calendar API権限を追加せず、ユーザーがGoogle側で最終確認して保存する方式です。
-そのため既存のGoogleログイン設定を変更せずに利用できます。
-
-双方向同期は次フェーズで実装します。
-
-## 活動履歴・予定編集
-
-- 活動履歴：案件詳細の活動行にある「✎」から編集
-- 予定：スケジュール一覧の「✎」から編集
-
-活動履歴編集時、「次回アクションを案件にも反映する」を選択した場合だけ案件側の次回アクションも更新します。
-
-## 新規セットアップ
-
-### 1. Supabaseを作成
-
-Supabaseで新規プロジェクトを作成します。
-SQL Editorで以下を実行してください。
-
-`supabase/schema.sql`
-
-### 2. Google認証
-
-Supabase Dashboard の Authentication > Providers > Google を有効化します。
-Google Cloud側でOAuth Clientを作成し、Supabaseが表示するCallback URLを登録します。
-
-アプリ側のOAuth後の戻り先：
-
-`https://あなたのドメイン/auth/callback`
-
-### 3. Vercel環境変数
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=xxxxx
-ALLOWED_EMAILS=your-google-account@gmail.com
+```text
 NEXT_PUBLIC_DEMO_MODE=false
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+ALLOWED_EMAILS=...
 ```
 
-## セキュリティ
+追加で以下を設定します。
 
-- Google OAuthで本人認証
-- `ALLOWED_EMAILS` で利用可能Googleアカウントを制限
-- DBは全業務テーブルでRLSを有効化
-- `user_id = auth.uid()` のデータのみ読み書き可能
-- 匿名ユーザーのDBアクセス権はrevoke
-- 編集後リダイレクト先はアプリ内相対URLだけ許可
+### GOOGLE_OAUTH_CLIENT_ID
 
-## 次の実装フェーズ
+Supabase → Authentication → Google Provider に設定したものと**同じGoogle OAuth Client ID**です。
 
-Ver.1.3で日常利用に必要な基本CRUDをほぼ揃えました。
-次は外部サービス連携フェーズへ進められます。
+```text
+GOOGLE_OAUTH_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+```
 
-1. **Google Calendar連携 Phase 2（双方向同期）**
-   - アプリ保存時の自動同期
-   - Google Calendar予定 → アプリ表示
-   - 更新・削除同期
-   - 二重登録防止
-2. Google Driveファイル選択・自動関連付け
-3. Gmailから活動履歴への取り込み
-4. 案件Kanbanのドラッグ操作
-5. 検索対象に担当者・活動本文を追加
-6. 見積・請求・入金管理
-7. AIによる案件要約・次回アクション提案
+### GOOGLE_OAUTH_CLIENT_SECRET
+
+同じOAuth ClientのClient Secretです。
+
+```text
+GOOGLE_OAUTH_CLIENT_SECRET=xxxxxxxx
+```
+
+これは秘密情報です。`NEXT_PUBLIC_` を付けないでください。GitHubにも登録しません。
+
+### GOOGLE_TOKEN_ENCRYPTION_KEY
+
+GoogleのRefresh TokenをSupabaseへ保存する際の暗号化キーです。
+
+32文字以上のランダム値を推奨します。
+
+PowerShellで生成する場合：
+
+```powershell
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$bytes = New-Object byte[] 32
+$rng.GetBytes($bytes)
+[Convert]::ToBase64String($bytes)
+$rng.Dispose()
+```
+
+表示された文字列をそのままValueに設定します。
+
+```text
+GOOGLE_TOKEN_ENCRYPTION_KEY=生成されたランダム文字列
+```
+
+この値もGitHubには登録しません。
+
+---
+
+## 6. VercelをRedeploy
+
+環境変数追加後、必ず再デプロイしてください。
+
+GitHubへのVer.1.4 push後のDeploymentに3つの新しい環境変数が入っていることを確認します。
+
+---
+
+## 7. アプリからGoogle Calendarを接続
+
+Ver.1.4へログイン後、
+
+`設定` → `Google Calendar` → `Google Calendarと接続`
+
+を押します。
+
+Googleの同意画面が表示されます。
+
+Calendarの予定を扱う権限を許可してください。
+
+正常終了すると設定画面に戻り、
+
+```text
+Google Calendar
+接続済み
+```
+
+と表示されます。
+
+この接続操作ではGoogleのRefresh Tokenを取得し、`GOOGLE_TOKEN_ENCRYPTION_KEY` で暗号化してSupabaseへ保存します。
+
+---
+
+# 動作確認
+
+## A. アプリ → Google
+
+1. CRMの「スケジュール」から新しい予定を作成
+2. Google Calendarを開く
+3. 同じ予定が自動で作成されていることを確認
+
+その後CRM側でタイトルや時間を変更し、Google側も更新されることを確認します。
+
+---
+
+## B. Google → アプリ
+
+1. CRMから作成してGoogleと同期済みの予定をGoogle Calendar側で編集
+2. CRMの「スケジュール」を開く
+3. `Googleから同期` を押す
+4. CRM側へ変更が反映されることを確認
+
+Google Calendar側で予定を削除した場合も、`Googleから同期` 後にCRM側から削除されます。
+
+---
+
+## C. Ver.1.3までの旧方式
+
+Ver.1.3の `Google Calendar ↗` から手動作成した予定は、まだGoogle Event IDをCRMが知りません。
+
+Ver.1.4の `Googleから同期` は、
+
+- 件名が同じ
+- 開始時刻が同じ
+
+既存予定を見つけると自動でGoogle Event IDを紐付けます。
+
+一致する予定がGoogle側にない場合、CRM側には「Google未同期」と表示されるので `再同期` を押してください。
+
+---
+
+# 同期方針
+
+## アプリ側操作
+
+Google接続済みの場合：
+
+- 新規：自動同期
+- 編集：自動同期
+- 削除：Googleも削除
+
+Google APIが一時的に失敗した場合、CRMの保存自体は維持し、予定に「同期エラー」を表示します。`再同期` から再実行できます。
+
+## Google側操作
+
+Google Calendarは外部サービスのため、Ver.1.4ではCRM画面の `Googleから同期` を押した時に変更を取得します。
+
+常時リアルタイム監視（Google Calendar Push Notifications / Webhook）は次段階候補です。
+
+---
+
+# セキュリティ
+
+Google ProviderのRefresh Tokenは強い権限を持つため、平文では保存しません。
+
+Ver.1.4では：
+
+1. GoogleからRefresh Tokenを取得
+2. Vercelサーバー側でAES-256-GCM暗号化
+3. 暗号文だけをSupabaseへ保存
+4. Google APIアクセス時のみサーバー側で復号
+
+という構成です。
+
+以下は絶対にGitHubへコミットしないでください。
+
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_TOKEN_ENCRYPTION_KEY`
+- Supabase Secret key / service_role key
+- Database password
+- `.env.local`
+
+Ver.1.4でもSupabase Secret key / service_role keyは使用しません。
+
+---
+
+# 環境変数一覧
+
+```text
+NEXT_PUBLIC_DEMO_MODE=false
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxx
+ALLOWED_EMAILS=your-google-account@example.com
+
+GOOGLE_OAUTH_CLIENT_ID=xxxxx.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=xxxxx
+GOOGLE_TOKEN_ENCRYPTION_KEY=xxxxx
+```
+
+---
+
+# Ver.1.4の次候補
+
+- Google Calendar Push Notificationsによる自動取り込み
+- CRM専用Google Calendarの選択・作成
+- Google Drive API連携
+- 案件画面からDriveファイル一覧を自動表示
+- Gmail連携
