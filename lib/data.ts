@@ -1,8 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { companies as demoCompanies, projects as demoProjects, schedules as demoSchedules, tasks as demoTasks } from "@/lib/mock-data";
-import type { Company, CompanyDetail, FormOptions, Project, ProjectLink, Activity, Task } from "@/lib/types";
+import type { Activity, Company, CompanyDetail, FormOptions, Project, ProjectHeader, ProjectLink, Task } from "@/lib/types";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
+const PROJECT_BASE_SELECT = `
+  id,name,company_id,primary_contact_id,category_id,status,priority,inquiry_date,proposal_date,order_date,start_date,due_date,completed_date,expected_amount,order_amount,next_action,next_action_due,description,memo,
+  companies(name),
+  contacts:primary_contact_id(name),
+  project_categories(name)
+`;
 
 type RawProject = {
   id: string;
@@ -50,7 +57,9 @@ function mapProject(row: RawProject): Project {
     expectedAmount: row.expected_amount ?? undefined,
     orderAmount: row.order_amount ?? undefined,
     nextAction: row.next_action ?? undefined,
-    nextActionDue: row.next_action_due ? new Date(row.next_action_due).toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" }).slice(0,16).replace(" ", "T") : undefined,
+    nextActionDue: row.next_action_due
+      ? new Date(row.next_action_due).toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" }).slice(0, 16).replace(" ", "T")
+      : undefined,
     description: row.description ?? "",
     memo: row.memo ?? undefined,
     links: [],
@@ -65,12 +74,7 @@ export async function getProjects(): Promise<Project[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("projects")
-    .select(`
-      id,name,company_id,primary_contact_id,category_id,status,priority,inquiry_date,proposal_date,order_date,start_date,due_date,completed_date,expected_amount,order_amount,next_action,next_action_due,description,memo,
-      companies(name),
-      contacts:primary_contact_id(name),
-      project_categories(name)
-    `)
+    .select(PROJECT_BASE_SELECT)
     .eq("is_archived", false)
     .order("updated_at", { ascending: false });
 
@@ -78,18 +82,57 @@ export async function getProjects(): Promise<Project[]> {
   return ((data ?? []) as unknown as RawProject[]).map(mapProject);
 }
 
-export async function getProject(id: string): Promise<Project | null> {
+/**
+ * 編集画面向け。活動・タスク・リンク・予定を取らず、案件本体だけを取得する。
+ */
+export async function getProjectOptions(): Promise<Array<{ id: string; name: string; companyId: string; companyName: string }>> {
+  if (demoMode) return demoProjects.map((p) => ({ id: p.id, name: p.name, companyId: p.companyId ?? "", companyName: p.companyName }));
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id,name,company_id,companies(name)")
+    .eq("is_archived", false)
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(error.message);
+
+  type Row = { id: string; name: string; company_id: string; companies: { name: string } | null };
+  return ((data ?? []) as unknown as Row[]).map((p) => ({
+    id: p.id, name: p.name, companyId: p.company_id, companyName: p.companies?.name ?? "取引先未設定"
+  }));
+}
+
+export async function getProjectBase(id: string): Promise<Project | null> {
   if (demoMode) return demoProjects.find((p) => p.id === id) ?? null;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("projects")
-    .select(`
-      id,name,company_id,primary_contact_id,category_id,status,priority,inquiry_date,proposal_date,order_date,start_date,due_date,completed_date,expected_amount,order_amount,next_action,next_action_due,description,memo,
-      companies(name),
-      contacts:primary_contact_id(name),
-      project_categories(name)
-    `)
+    .select(PROJECT_BASE_SELECT)
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  return mapProject(data as unknown as RawProject);
+}
+
+/**
+ * タスク・活動・URL・予定の追加画面向け。必要最小限の3項目だけ取得する。
+ */
+export async function getProjectHeader(id: string): Promise<ProjectHeader | null> {
+  if (demoMode) {
+    const project = demoProjects.find((p) => p.id === id);
+    if (!project) return null;
+    return { id: project.id, name: project.name, companyId: project.companyId ?? "", companyName: project.companyName };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id,name,company_id,companies(name)")
     .eq("id", id)
     .single();
 
@@ -98,20 +141,43 @@ export async function getProject(id: string): Promise<Project | null> {
     throw new Error(error.message);
   }
 
-  const project = mapProject(data as unknown as RawProject);
+  const row = data as unknown as { id: string; name: string; company_id: string; companies: { name: string } | null };
+  return { id: row.id, name: row.name, companyId: row.company_id, companyName: row.companies?.name ?? "取引先未設定" };
+}
 
-  const [{ data: links }, { data: activities }, { data: tasks }, { data: schedules }] = await Promise.all([
+/**
+ * 案件詳細。案件本体を先に待たず、関連5クエリを同時に開始して往復待ちを減らす。
+ */
+export async function getProject(id: string): Promise<Project | null> {
+  if (demoMode) return demoProjects.find((p) => p.id === id) ?? null;
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  const [baseResult, linksResult, activitiesResult, tasksResult, schedulesResult] = await Promise.all([
+    supabase.from("projects").select(PROJECT_BASE_SELECT).eq("id", id).single(),
     supabase.from("project_links").select("id,name,url,link_type,is_pinned,pin_order").eq("project_id", id).order("sort_order"),
     supabase.from("activities").select("id,activity_at,activity_type,title,content").eq("project_id", id).order("activity_at", { ascending: false }).limit(50),
     supabase.from("tasks").select("id,title,status,priority,due_at").eq("project_id", id).order("due_at", { ascending: true }),
-    supabase.from("schedules").select("start_at,title").eq("project_id", id).gte("start_at", new Date().toISOString()).order("start_at", { ascending: true }).limit(1)
+    supabase.from("schedules").select("start_at,title").eq("project_id", id).gte("start_at", now).order("start_at", { ascending: true }).limit(1)
   ]);
 
-  project.links = ((links ?? []) as Array<{id:string;name:string;url:string;link_type:string;is_pinned:boolean;pin_order:number|null}>).map((l): ProjectLink => ({
+  if (baseResult.error) {
+    if (baseResult.error.code === "PGRST116") return null;
+    throw new Error(baseResult.error.message);
+  }
+  if (linksResult.error) throw new Error(linksResult.error.message);
+  if (activitiesResult.error) throw new Error(activitiesResult.error.message);
+  if (tasksResult.error) throw new Error(tasksResult.error.message);
+  if (schedulesResult.error) throw new Error(schedulesResult.error.message);
+
+  const project = mapProject(baseResult.data as unknown as RawProject);
+
+  project.links = ((linksResult.data ?? []) as Array<{id:string;name:string;url:string;link_type:string;is_pinned:boolean;pin_order:number|null}>).map((l): ProjectLink => ({
     id: l.id, name: l.name, url: l.url, linkType: l.link_type, pinned: l.is_pinned, pinOrder: l.pin_order ?? undefined
   }));
 
-  project.activities = ((activities ?? []) as Array<{id:string;activity_at:string;activity_type:string;title:string|null;content:string}>).map((a): Activity => ({
+  project.activities = ((activitiesResult.data ?? []) as Array<{id:string;activity_at:string;activity_type:string;title:string|null;content:string}>).map((a): Activity => ({
     id: a.id,
     date: new Date(a.activity_at).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" }),
     type: a.activity_type,
@@ -119,7 +185,7 @@ export async function getProject(id: string): Promise<Project | null> {
     content: a.content
   }));
 
-  project.tasks = ((tasks ?? []) as Array<{id:string;title:string;status:Task["status"];priority:Task["priority"];due_at:string|null}>).map((t): Task => ({
+  project.tasks = ((tasksResult.data ?? []) as Array<{id:string;title:string;status:Task["status"];priority:Task["priority"];due_at:string|null}>).map((t): Task => ({
     id: t.id,
     title: t.title,
     projectId: project.id,
@@ -130,7 +196,7 @@ export async function getProject(id: string): Promise<Project | null> {
     due: t.due_at ? new Date(t.due_at).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" }) : "—"
   }));
 
-  const nextSchedule = (schedules ?? [])[0] as {start_at:string;title:string} | undefined;
+  const nextSchedule = (schedulesResult.data ?? [])[0] as {start_at:string;title:string} | undefined;
   if (nextSchedule) {
     project.nextSchedule = `${new Date(nextSchedule.start_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}　${nextSchedule.title}`;
   }
@@ -181,7 +247,7 @@ export async function getCompanies(): Promise<Company[]> {
     industry:c.industry ?? "—",
     activeProjects:c.projects.filter((p) => !["completed","lost"].includes(p.status)).length,
     lastContact:c.activities.length
-      ? c.activities.map((a) => a.activity_at).sort().reverse()[0].slice(0,10)
+      ? c.activities.reduce((latest, a) => a.activity_at > latest ? a.activity_at : latest, c.activities[0].activity_at).slice(0,10)
       : "—"
   }));
 }
@@ -213,7 +279,6 @@ export async function getSchedules() {
   });
 }
 
-
 export async function getFormOptions(): Promise<FormOptions> {
   if (demoMode) {
     return {
@@ -243,6 +308,33 @@ export async function getFormOptions(): Promise<FormOptions> {
     companies: (companies ?? []).map((x) => ({ id: x.id, name: x.name })),
     contacts: (contacts ?? []).map((x) => ({ id: x.id, companyId: x.company_id, name: x.name })),
     categories: (categories ?? []).map((x) => ({ id: x.id, name: x.name }))
+  };
+}
+
+/** 取引先編集画面向け。担当者・案件一覧を取らない。 */
+export async function getCompanyBase(id: string): Promise<CompanyDetail | null> {
+  if (demoMode) {
+    const base = demoCompanies.find((x) => x.id === id);
+    if (!base) return null;
+    return { id: base.id, name: base.name, industry: base.industry, contacts: [], projects: [] };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("companies")
+    .select("id,name,company_type,industry,postal_code,address,phone,email,website_url,memo")
+    .eq("id", id)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  const c = data as { id:string; name:string; company_type:string|null; industry:string|null; postal_code:string|null; address:string|null; phone:string|null; email:string|null; website_url:string|null; memo:string|null };
+  return {
+    id:c.id, name:c.name, companyType:c.company_type ?? undefined, industry:c.industry ?? undefined,
+    postalCode:c.postal_code ?? undefined, address:c.address ?? undefined, phone:c.phone ?? undefined,
+    email:c.email ?? undefined, websiteUrl:c.website_url ?? undefined, memo:c.memo ?? undefined,
+    contacts: [], projects: []
   };
 }
 

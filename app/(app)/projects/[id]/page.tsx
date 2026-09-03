@@ -4,7 +4,8 @@ import QuickLinks from "@/components/QuickLinks";
 import StatusBadge from "@/components/StatusBadge";
 import { priorityLabel } from "@/lib/mock-data";
 import { getProject } from "@/lib/data";
-import { archiveProject, deleteActivity, deleteProjectLink, deleteTask, setTaskStatus } from "@/lib/actions";
+import { archiveProject, deleteActivity, deleteProjectLink, deleteTask } from "@/lib/actions";
+import TaskStatusToggle from "@/components/TaskStatusToggle";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -34,7 +35,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <div className="detail-grid">
-        <section className="card" id="tasks"><div className="card-head"><h2>タスク</h2><Link className="button soft" href={`/projects/${id}/tasks/new`}>＋ タスク</Link></div><div className="list">{project.tasks.length ? project.tasks.map((t) => <div className="list-row" key={t.id}><form action={setTaskStatus}><input type="hidden" name="id" value={t.id}/><input type="hidden" name="project_id" value={id}/><input type="hidden" name="status" value={t.status === "completed" ? "todo" : "completed"}/><button className={`task-check ${t.status === "completed" ? "done" : ""}`} title="完了切替"/></form><div className="grow"><div className="list-title">{t.title}</div><div className="small muted">期限：{t.due}</div></div><span className="badge">{t.priority === "high" ? "高" : t.priority === "medium" ? "中" : "低"}</span><form action={deleteTask}><input type="hidden" name="id" value={t.id}/><input type="hidden" name="project_id" value={id}/><button className="icon-button" title="削除">×</button></form></div>) : <div className="empty">タスクはまだありません。</div>}</div></section>
+        <section className="card" id="tasks"><div className="card-head"><h2>タスク</h2><Link className="button soft" href={`/projects/${id}/tasks/new`}>＋ タスク</Link></div><div className="list">{project.tasks.length ? project.tasks.map((t) => <div className="list-row" key={t.id}><TaskStatusToggle id={t.id} status={t.status} projectId={id}/><div className="grow"><div className="list-title">{t.title}</div><div className="small muted">期限：{t.due}</div></div><span className="badge">{t.priority === "high" ? "高" : t.priority === "medium" ? "中" : "低"}</span><form action={deleteTask}><input type="hidden" name="id" value={t.id}/><input type="hidden" name="project_id" value={id}/><button className="icon-button" title="削除">×</button></form></div>) : <div className="empty">タスクはまだありません。</div>}</div></section>
         <section className="card" id="links"><div className="card-head"><h2>関連リンク</h2><Link className="button soft" href={`/projects/${id}/links/new`}>＋ URL</Link></div><div className="list">{project.links.length ? project.links.map((link) => <div className="list-row" key={link.id}><div className="grow"><div className="list-title">{link.pinned ? "📌 " : ""}{link.name}</div><div className="small muted">{link.linkType}</div></div><a className="button" href={link.url} target="_blank" rel="noreferrer">開く ↗</a><form action={deleteProjectLink}><input type="hidden" name="id" value={link.id}/><input type="hidden" name="project_id" value={id}/><button className="icon-button" title="削除">×</button></form></div>) : <div className="empty">関連リンクはまだありません。</div>}</div></section>
       </div>
 

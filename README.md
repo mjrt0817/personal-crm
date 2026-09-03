@@ -1,7 +1,19 @@
-# Personal CRM / SFA Ver.1.1
+# Personal CRM / SFA Ver.1.2
 
 個人事業向けの取引先・案件・タスク・予定・活動履歴管理Webアプリです。
 案件詳細を業務のハブとし、Teams報告先やGoogle Drive等の関連URLを最大4件クイックリンクとして固定できます。
+
+## Ver.1.2 の主な改善
+
+- Vercel FunctionsをTokyo（`hnd1`）へ固定
+- 案件詳細の5クエリを同時実行し、DB往復待ちを短縮
+- タスク・活動・予定・URL追加画面では案件詳細全体を読まず、必要最小限の案件ヘッダーだけ取得
+- 案件編集・取引先編集でも不要な関連データを取得しない
+- タスク完了切替をOptimistic UI化し、クリック直後に見た目を反映
+- Server Action後の再検証対象を必要な画面だけに限定
+- 画面遷移中のローディングバー・スケルトンを追加
+- 保存・追加ボタンに「保存中」「追加中」表示を追加
+- よく使う検索条件向けの複合インデックスを追加
 
 ## 実装済み
 
@@ -24,20 +36,36 @@
 - 全体検索（取引先・案件）
 - デモデータ表示モード
 
-## 1. Supabaseを作成
+## 既存Ver.1.1から更新する場合
+
+### 1. GitHubへVer.1.2を反映
+
+ソースを更新してmainへpushすると、Vercelが自動デプロイします。
+`vercel.json` ではNext.jsとTokyoリージョンを明示しています。
+
+### 2. Supabaseで性能改善SQLを一度だけ実行
+
+Supabase > SQL Editor > New query を開き、以下のファイル内容を貼り付けて `Run` してください。
+
+`supabase/migrations/002_performance_indexes.sql`
+
+既存データは削除・変更しません。`create index if not exists` のみなので再実行しても安全です。
+
+## 新規セットアップ
+
+### 1. Supabaseを作成
 
 Supabaseで新規プロジェクトを作成します。
-
 SQL Editorで以下を実行してください。
 
 `supabase/schema.sql`
 
-## 2. Google認証
+### 2. Google認証
 
 Supabase Dashboard の Authentication > Providers > Google を有効化します。
 Google Cloud側でOAuth Clientを作成し、Supabaseが表示するCallback URLを登録します。
 
-アプリ側のOAuth後の戻り先は以下です。
+アプリ側のOAuth後の戻り先：
 
 `https://あなたのドメイン/auth/callback`
 
@@ -45,9 +73,7 @@ Google Cloud側でOAuth Clientを作成し、Supabaseが表示するCallback URL
 
 `http://localhost:3000/auth/callback`
 
-## 3. 環境変数
-
-`.env.example` を `.env.local` にコピーします。
+### 3. 環境変数
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
@@ -58,7 +84,7 @@ NEXT_PUBLIC_DEMO_MODE=false
 
 複数メールを許可する場合はカンマ区切りです。
 
-## 4. 起動
+### 4. ローカル起動
 
 ```bash
 npm install
@@ -67,9 +93,7 @@ npm run dev
 
 `http://localhost:3000` を開きます。
 
-## 5. デモモード
-
-Supabase接続前に画面だけ確認する場合：
+## デモモード
 
 ```env
 NEXT_PUBLIC_DEMO_MODE=true

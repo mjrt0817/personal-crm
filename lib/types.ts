@@ -42,6 +42,14 @@ export type Task = {
   due: string;
 };
 
+
+export type ProjectHeader = {
+  id: string;
+  name: string;
+  companyId: string;
+  companyName: string;
+};
+
 export type Project = {
   id: string;
   name: string;

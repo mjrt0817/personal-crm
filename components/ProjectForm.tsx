@@ -1,3 +1,4 @@
+import SubmitButton from "@/components/SubmitButton";
 import type { FormOptions, Project } from "@/lib/types";
 
 const statuses = [
@@ -51,7 +52,7 @@ export default function ProjectForm({ project, options, action }: { project?: Pr
         <label className="field"><span>案件メモ</span><textarea name="memo" rows={5} defaultValue={project?.memo}/></label>
       </div>
 
-      <div className="form-actions"><a href={project ? `/projects/${project.id}` : "/projects"} className="button">キャンセル</a><button type="submit" className="button primary">保存</button></div>
+      <div className="form-actions"><a href={project ? `/projects/${project.id}` : "/projects"} className="button">キャンセル</a><SubmitButton>保存</SubmitButton></div>
     </form>
   );
 }

@@ -1,3 +1,4 @@
+import SubmitButton from "@/components/SubmitButton";
 import type { CompanyDetail } from "@/lib/types";
 
 export default function CompanyForm({ company, action }: { company?: CompanyDetail; action: (formData: FormData) => void | Promise<void> }) {
@@ -18,7 +19,7 @@ export default function CompanyForm({ company, action }: { company?: CompanyDeta
         <label className="field"><span>Webサイト</span><input type="url" name="website_url" placeholder="https://" defaultValue={company?.websiteUrl}/></label>
         <label className="field"><span>メモ</span><textarea name="memo" rows={5} defaultValue={company?.memo}/></label>
       </div>
-      <div className="form-actions"><a href={company ? `/companies/${company.id}` : "/companies"} className="button">キャンセル</a><button type="submit" className="button primary">保存</button></div>
+      <div className="form-actions"><a href={company ? `/companies/${company.id}` : "/companies"} className="button">キャンセル</a><SubmitButton>保存</SubmitButton></div>
     </form>
   );
 }
