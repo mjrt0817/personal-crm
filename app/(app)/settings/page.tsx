@@ -23,11 +23,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <section className="card" style={{ marginBottom: 18 }}>
         <div className="card-head"><h2>Google Workspace</h2><span className={`badge ${status.connected ? "green" : ""}`}>{status.connected ? "接続済み" : "未接続"}</span></div>
         <div className="card-body">
-          <p className="muted">Google CalendarとGoogle Driveを同じGoogleアカウントで連携します。Calendarは予定の同期、Driveは案件フォルダのファイル一覧取得に利用します。</p>
+          <p className="muted">Google Calendar・Google Drive・Gmailを同じGoogleアカウントで連携します。Calendarは予定同期、Driveは案件フォルダ、Gmailは案件に関連するメールの参照に利用します。</p>
           <div className="kv"><div className="k">状態</div><div>{status.connected ? "接続済み" : "未接続"}</div></div>
           <div className="kv"><div className="k">Googleアカウント</div><div>{status.googleEmail ?? "—"}</div></div>
           <div className="kv"><div className="k">Calendar</div><div>予定の作成・更新・削除＋アプリ利用中の約5分間隔自動同期</div></div>
           <div className="kv"><div className="k">Drive</div><div>案件フォルダのメタデータ読み取り（ファイル本文は保存しません）</div></div>
+          <div className="kv"><div className="k">Gmail</div><div>取引先・担当者メールアドレスで関連メールを検索し、件名・送受信者・日時・本文snippetを案件へ保存</div></div>
           <div className="kv"><div className="k">接続日時</div><div>{formatDateTime(status.connectedAt)}</div></div>
           <div className="kv"><div className="k">Calendar最終同期</div><div>{formatDateTime(status.lastSyncAt)}</div></div>
           {status.lastSyncError && <div className="kv"><div className="k">同期エラー</div><div style={{ color: "var(--danger)" }}>{status.lastSyncError}</div></div>}
@@ -35,7 +36,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <GoogleCalendarConnectButton connected={status.connected} />
             {status.connected && <form action={disconnectGoogleCalendar}><button className="button danger" type="submit">Google連携を解除</button></form>}
           </div>
-          {status.connected && <p className="small muted" style={{ marginTop: 12 }}>Google Calendarはアプリを開いている間と、タブへ戻った時に自動同期します。常時バックグラウンド同期は行わないため、必要な場合はスケジュール画面の手動同期も利用できます。</p>}
+          {status.connected && <><p className="small muted" style={{ marginTop: 12 }}>Google Calendarはアプリを開いている間と、タブへ戻った時に自動同期します。Gmailは案件の活動画面から手動同期します。</p><p className="small muted" style={{ marginTop: 8 }}>Gmail連携では制限付きOAuthスコープを使用します。個人利用を前提とした機能です。第三者向けに公開する場合はGoogleのOAuth審査要件を別途確認してください。</p></>}
         </div>
       </section>
 

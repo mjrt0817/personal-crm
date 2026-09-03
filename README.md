@@ -1,111 +1,112 @@
-# Personal CRM Ver.1.7
+# Personal CRM Ver.1.8
 
 個人用 SFA + CRM + 案件・タスク・スケジュール管理ツールです。
 
-Ver.1.7では、案件詳細の操作性を大きく見直し、**ページ内リンク方式からタブ切替方式へ変更**しました。あわせて、Ver.1.6で手動だったGoogle Drive同期を、案件を利用している間は自動で更新する仕組みにしています。
+Ver.1.8では **Gmail案件連携** を追加しました。取引先・担当者に登録されているメールアドレスを使ってGmailから関連メールを検索し、案件の「活動」画面から確認できます。必要なメールだけを1クリックで活動履歴へ追加できます。
 
-## Ver.1.7の主な追加・改善
+## Ver.1.8の主な追加・改善
 
-### 1. 案件詳細をタブ方式へ変更
+### 1. 案件ごとのGmail関連メール
 
-案件詳細の以下を、縦に並べる方式からタブ切替へ変更しました。
+案件詳細 → **活動** に「Gmail 関連メール」を追加しました。
 
-- 概要
-- 活動
-- タスク
-- 予定
-- 関連リンク
-- Drive
-- メモ
+- 取引先の代表メール
+- 取引先に登録されている担当者メール
 
-タブを押してもページ再読み込みは発生しません。クライアント側で即座に切り替わります。
+を対象に、Gmailの過去1年分から送受信メールを検索します。
 
-活動・タスク・関連リンク・Driveには件数バッジも表示します。
+初期設定では1回の同期につき最大30件を確認します。
 
-### 2. 編集後も元のタブへ戻る
+### 2. Gmail本文全体は保存しない
 
-タスク、活動、関連リンク等を編集・追加・削除した後は、案件詳細の該当タブへ戻るように変更しました。
+Supabaseへ保存するのは以下の参照情報です。
 
-例：
+- Gmail message / thread ID
+- 件名
+- 差出人
+- 宛先・CC
+- 送受信日時
+- Gmail APIのsnippet（短い本文プレビュー）
+- Gmailを開くURL
 
-```text
-タスクタブ
-↓
-タスク編集
-↓
-保存
-↓
-案件詳細のタスクタブ
-```
+**メール本文全体・添付ファイルはSupabaseへ保存しません。**
 
-旧バージョンの `#tasks` 等のURLを開いた場合にも、該当タブを認識する互換処理を残しています。
+### 3. メールを活動履歴へ追加
 
-### 3. スマホでもタブ切替
+関連メールから **「活動履歴に追加」** を押すと、次の内容でCRMの活動履歴を作成します。
 
-スマートフォンではタブ列を横スクロールできます。
+- 種別：メール
+- 日時：メール日時
+- 件名：メール件名
+- 内容：送受信情報＋snippet＋Gmailリンク
 
-また、スクロール中もタブを見失いにくいよう、画面上部にスティッキー表示します。
+同じメールを二重で活動登録しないための重複防止も入れています。
 
-画面下部の
+### 4. Gmailを直接開く
 
-```text
-＋ 活動   ＋ タスク   ＋ 予定
-```
+各メールの **「Gmail ↗」** から元メールへ移動できます。
 
-はVer.1.6同様に利用できます。
-
-### 4. Google Drive自動同期
-
-案件にGoogle Driveフォルダが紐付いている場合、案件詳細を利用している間にDriveを自動確認します。
-
-- 案件を開いた後に同期確認
-- ブラウザタブへ戻った時に同期確認
-- 約10分間隔で確認
-- サーバー側でも約9分のスロットリング
-- 同期直後ならAPIを再度呼ばずスキップ
-- エラー時も画面操作を止めない
-
-Drive APIの過剰呼び出しを避けるため、全案件を常時巡回する方式ではなく、**現在利用中の案件だけを自動同期**します。
-
-手動の「今すぐ同期」ボタンも残しています。
+活動タブでは直近8件、**「すべて表示」** では同期済みメールを最大100件表示します。
 
 ---
 
-# Ver.1.6からの更新手順
+# Ver.1.7からの更新手順
 
-## 1. Supabase
+## 1. Supabase migration
 
-**追加migrationはありません。**
-
-Ver.1.5までの以下が実行済みならそのままで大丈夫です。
+Supabase → **SQL Editor → New query** で、以下を全文実行してください。
 
 ```text
-002_performance_indexes.sql
-003_google_calendar_sync.sql
-004_google_drive_integration.sql
+supabase/migrations/005_gmail_project_integration.sql
 ```
 
-## 2. Google Cloud
+既存の取引先・案件・活動データは削除されません。
 
-追加設定はありません。
+追加される主なDB要素：
 
-既存の以下をそのまま利用します。
+```text
+project_gmail_syncs
+gmail_messages
+activities.source
+activities.source_external_id
+```
 
-- Google Calendar API
-- Google Drive API
+## 2. Google CloudでGmail APIを有効化
 
-OAuth scope：
+既存のPersonal CRM用Google Cloud Projectで、API Libraryから
+
+**Gmail API**
+
+を追加して **Enable / 有効化** してください。
+
+Calendar API・Drive APIと同じGoogle Cloud Projectを使用します。
+
+## 3. Google Auth PlatformへGmail scopeを追加
+
+Google Auth Platform → **Data Access → Add or Remove Scopes** で、以下を追加します。
+
+```text
+https://www.googleapis.com/auth/gmail.readonly
+```
+
+既存の以下は削除しません。
 
 ```text
 https://www.googleapis.com/auth/calendar.events
 https://www.googleapis.com/auth/drive.metadata.readonly
 ```
 
-## 3. Vercel
+## 4. GitHubへVer.1.8を反映
 
-追加の環境変数はありません。
+ZIPを展開し、`personal-crm-v1.8` フォルダの**中身**をGitHubリポジトリ直下へ上書きしてください。
 
-既存設定をそのまま利用します。
+mainへ反映するとVercelが自動デプロイします。
+
+## 5. Vercel
+
+新しい環境変数はありません。
+
+既存の以下をそのまま使用します。
 
 ```text
 NEXT_PUBLIC_DEMO_MODE=false
@@ -117,59 +118,61 @@ GOOGLE_OAUTH_CLIENT_SECRET=...
 GOOGLE_TOKEN_ENCRYPTION_KEY=...
 ```
 
-## 4. GitHub
+## 6. Google Workspaceを再接続
 
-ZIPを展開し、`personal-crm-v1.7` フォルダの**中身**をGitHubリポジトリ直下へ上書きしてください。
+Gmail scopeを追加しただけでは、現在保存されているRefresh TokenにGmail権限は追加されません。
 
-`main` へ反映すればVercelが自動デプロイします。
+CRM → **設定 → Google Workspace → Google Workspaceを再接続**
+
+を実行し、Googleの同意画面でGmailへの読み取り権限を許可してください。
+
+Google側の同意画面にGmail権限が出ない場合は、一度Googleアカウント側からPersonal CRMへのアクセス許可を削除してから再接続してください。
 
 ---
 
 # 動作確認
 
-## 案件詳細タブ
+1. 取引先または担当者に実際のメールアドレスが入っていることを確認
+2. 案件詳細 → **活動** を開く
+3. **↻ Gmailを同期** を押す
+4. 関連する送受信メールが表示されることを確認
+5. **Gmail ↗** から元メールを開けることを確認
+6. 任意メールの **活動履歴に追加** を押す
+7. 下部の活動履歴にメール活動が追加されることを確認
+8. 同じメールに「活動登録済」と表示されることを確認
 
-1. 任意の案件詳細を開く
-2. 「概要」「活動」「タスク」「Drive」等を順番にクリック
-3. ページが上下移動せず、内容だけが切り替わることを確認
-4. タスク編集 → 保存後、タスクタブへ戻ることを確認
-5. 関連リンク編集 → 保存後、関連リンクタブへ戻ることを確認
+## 「Request had insufficient authentication scopes.」の場合
 
-## Drive自動同期
+Gmail scopeを追加した後の再接続ができていません。
 
-1. Driveフォルダ連携済み案件を開く
-2. Google Drive側でファイル名変更またはファイル追加
-3. 前回同期から10分程度経過後、CRMの案件タブへ戻る
-4. Driveタブで更新が反映されることを確認
+```text
+設定 → Google Workspace → 再接続
+```
 
-すぐ確認したい場合は「今すぐ同期」を使えます。
+を実施してください。
 
----
+## 「Gmail API has not been used...」の場合
 
-# セキュリティ
-
-Ver.1.7で新しい秘密鍵・OAuth scopeは追加していません。
-
-Drive自動同期APIは、ログイン中のSupabaseセッションが存在するユーザーのみ利用できます。データアクセスは既存のRLSに従います。
-
-Google Driveから取得するのは引き続きメタデータのみです。
-
-- ファイル名
-- URL
-- MIMEタイプ
-- 更新日時
-- フォルダ内パス
-
-ファイル本文はSupabaseへ保存しません。
+Google CloudでGmail APIが有効化されていないか、OAuth Clientとは別のGoogle Cloud ProjectでAPIを有効化している可能性があります。
 
 ---
 
-# 次段階候補
+# Gmail OAuth scopeについて
 
-Ver.1.7確認後は、Google Workspace連携の次段階として以下を想定しています。
+`gmail.readonly` はGoogle上の **Restricted（制限付き）scope** です。
 
-1. Gmail連携
-2. メールを取引先・案件へ紐付け
-3. メールから活動履歴を簡単に作成
-4. 見積・請求・売上管理
-5. AIによる案件要約・次回アクション提案
+このCRMは本人のみが利用する個人用ツールとして設計しています。個人利用・開発/テスト用途ではGoogleのVerification例外に該当する場合がありますが、今後このアプリを第三者へ提供する場合は、Google OAuth Verificationやセキュリティ評価の要否を改めて確認してください。
+
+またVer.1.8では、必要以上のメールデータを保存しないよう、本文全体や添付ファイルは取得・保存しない設計にしています。
+
+---
+
+# 今後の候補
+
+Ver.1.8確認後は次の順を想定しています。
+
+1. Gmail検索条件・紐付け精度の改善
+2. Gmailから「返信が必要」「待ち」をタスク化
+3. 見積・請求・売上管理
+4. AIによる案件要約・次回アクション提案
+5. 案件詳細UI（タブ方式を含む）の再調整

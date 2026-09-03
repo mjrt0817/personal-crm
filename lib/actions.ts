@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { deleteScheduleFromGoogle, pullGoogleCalendar, revokeGoogleCalendarConnection, syncScheduleToGoogle } from "@/lib/google-calendar-server";
 import { registerProjectDriveFolder, syncProjectDriveFolder } from "@/lib/google-drive-server";
+import { syncProjectGmail } from "@/lib/google-gmail-server";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
@@ -655,4 +656,73 @@ export async function deleteContact(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath(`/companies/${companyId}`);
   redirect(`/companies/${companyId}#contacts`);
+}
+
+export async function syncProjectGmailNow(formData: FormData) {
+  const projectId = required(formData, "project_id", "案件ID");
+  if (demoMode) demoReturn(formData, `/projects/${projectId}?tab=activities`);
+  const { supabase, userId } = await authed();
+  let target = `/projects/${projectId}?tab=activities&gmail=error`;
+  try {
+    const result = await syncProjectGmail(supabase, userId, projectId);
+    revalidatePath(`/projects/${projectId}`);
+    const qs = new URLSearchParams({ tab: "activities", gmail: "synced", count: String(result.count) });
+    target = `/projects/${projectId}?${qs.toString()}`;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Gmail同期に失敗しました。";
+    const qs = new URLSearchParams({ tab: "activities", gmail: "error", message });
+    target = `/projects/${projectId}?${qs.toString()}`;
+  }
+  redirect(target);
+}
+
+export async function createActivityFromGmail(formData: FormData) {
+  const projectId = required(formData, "project_id", "案件ID");
+  const gmailRowId = required(formData, "gmail_row_id", "GmailメッセージID");
+  if (demoMode) demoReturn(formData, `/projects/${projectId}?tab=activities`);
+  const { supabase, userId } = await authed();
+
+  const { data: mail, error: mailError } = await supabase
+    .from("gmail_messages")
+    .select("id,company_id,project_id,gmail_message_id,subject,from_text,to_text,sent_at,snippet,gmail_url,is_outgoing,activity_id")
+    .eq("id", gmailRowId)
+    .eq("project_id", projectId)
+    .single();
+  if (mailError) throw new Error(mailError.message);
+
+  if (mail.activity_id) redirect(`/projects/${projectId}?tab=activities&gmail=already_added`);
+
+  const direction = mail.is_outgoing ? "送信メール" : "受信メール";
+  const content = [
+    direction,
+    mail.from_text ? `差出人: ${mail.from_text}` : null,
+    mail.to_text ? `宛先: ${mail.to_text}` : null,
+    "",
+    mail.snippet || "（本文プレビューなし）",
+    "",
+    `Gmail: ${mail.gmail_url}`
+  ].filter((v) => v !== null).join("\n");
+
+  const { data: activity, error: activityError } = await supabase.from("activities").insert({
+    user_id: userId,
+    company_id: mail.company_id,
+    project_id: projectId,
+    activity_type: "email",
+    activity_at: mail.sent_at || new Date().toISOString(),
+    title: mail.subject || "(件名なし)",
+    content,
+    source: "gmail",
+    source_external_id: mail.gmail_message_id
+  }).select("id").single();
+
+  if (activityError) {
+    if (activityError.code === "23505") redirect(`/projects/${projectId}?tab=activities&gmail=already_added`);
+    throw new Error(activityError.message);
+  }
+
+  const { error: updateError } = await supabase.from("gmail_messages").update({ activity_id: activity.id }).eq("id", gmailRowId);
+  if (updateError) throw new Error(updateError.message);
+
+  invalidateActivityMutation(projectId);
+  redirect(`/projects/${projectId}?tab=activities&gmail=added`);
 }

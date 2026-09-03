@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { companies as demoCompanies, projects as demoProjects, schedules as demoSchedules, tasks as demoTasks } from "@/lib/mock-data";
-import type { Activity, ActivityDetail, Company, CompanyDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ScheduleDetail, Task, TaskDetail } from "@/lib/types";
+import type { Activity, ActivityDetail, Company, CompanyDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail } from "@/lib/types";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
@@ -690,5 +690,51 @@ export async function getDashboardSnapshot() {
     noNextProjects,
     recentProjects: projects.slice(0, 8),
     recentDriveFiles
+  };
+}
+
+export async function getProjectGmailSummary(projectId: string, limit = 8): Promise<ProjectGmailSummary> {
+  if (demoMode) return { messages: [] };
+  const supabase = await createClient();
+
+  const [messageResult, syncResult] = await Promise.all([
+    supabase
+      .from("gmail_messages")
+      .select("id,project_id,company_id,gmail_message_id,gmail_thread_id,subject,from_text,to_text,cc_text,sent_at,snippet,gmail_url,is_outgoing,activity_id")
+      .eq("project_id", projectId)
+      .order("sent_at", { ascending: false, nullsFirst: false })
+      .limit(limit),
+    supabase
+      .from("project_gmail_syncs")
+      .select("last_sync_at,last_sync_error")
+      .eq("project_id", projectId)
+      .maybeSingle()
+  ]);
+
+  const tableMissing = (error: any) => error?.code === "42P01" || error?.code === "PGRST205";
+  if (messageResult.error && !tableMissing(messageResult.error)) throw new Error(messageResult.error.message);
+  if (syncResult.error && !tableMissing(syncResult.error)) throw new Error(syncResult.error.message);
+
+  const messages: GmailMessageItem[] = (messageResult.data ?? []).map((m: any) => ({
+    id: m.id,
+    projectId: m.project_id,
+    companyId: m.company_id ?? undefined,
+    gmailMessageId: m.gmail_message_id,
+    gmailThreadId: m.gmail_thread_id,
+    subject: m.subject || "(件名なし)",
+    fromText: m.from_text ?? undefined,
+    toText: m.to_text ?? undefined,
+    ccText: m.cc_text ?? undefined,
+    sentAt: m.sent_at ?? undefined,
+    snippet: m.snippet ?? undefined,
+    gmailUrl: m.gmail_url,
+    outgoing: Boolean(m.is_outgoing),
+    activityId: m.activity_id ?? undefined
+  }));
+
+  return {
+    messages,
+    lastSyncAt: syncResult.data?.last_sync_at ?? undefined,
+    lastSyncError: syncResult.data?.last_sync_error ?? undefined
   };
 }

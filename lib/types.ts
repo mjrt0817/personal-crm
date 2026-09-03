@@ -190,3 +190,26 @@ export type FormOptions = {
   contacts: Array<{ id: string; companyId: string; name: string }>;
   categories: Array<{ id: string; name: string }>;
 };
+
+export type GmailMessageItem = {
+  id: string;
+  projectId: string;
+  companyId?: string;
+  gmailMessageId: string;
+  gmailThreadId: string;
+  subject: string;
+  fromText?: string;
+  toText?: string;
+  ccText?: string;
+  sentAt?: string;
+  snippet?: string;
+  gmailUrl: string;
+  outgoing: boolean;
+  activityId?: string;
+};
+
+export type ProjectGmailSummary = {
+  messages: GmailMessageItem[];
+  lastSyncAt?: string;
+  lastSyncError?: string;
+};

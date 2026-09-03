@@ -4,8 +4,9 @@ import QuickLinks from "@/components/QuickLinks";
 import StatusBadge from "@/components/StatusBadge";
 import ProjectDetailTabs from "@/components/ProjectDetailTabs";
 import AutoDriveSync from "@/components/AutoDriveSync";
+import ProjectGmailPanel from "@/components/ProjectGmailPanel";
 import { priorityLabel } from "@/lib/mock-data";
-import { getProject, getProjectDriveSummary } from "@/lib/data";
+import { getProject, getProjectDriveSummary, getProjectGmailSummary } from "@/lib/data";
 import { archiveProject, deleteActivity, deleteProjectLink, deleteTask, syncProjectDriveFolderNow } from "@/lib/actions";
 import TaskStatusToggle from "@/components/TaskStatusToggle";
 
@@ -16,12 +17,12 @@ export default async function ProjectDetailPage({
   searchParams
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; gmail?: string; count?: string; message?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
   const initialTab = query.tab && VALID_TABS.has(query.tab) ? query.tab : "overview";
-  const [project, drive] = await Promise.all([getProject(id), getProjectDriveSummary(id, 8)]);
+  const [project, drive, gmail] = await Promise.all([getProject(id), getProjectDriveSummary(id, 8), getProjectGmailSummary(id, 8)]);
   if (!project) notFound();
 
   const overview = (
@@ -42,16 +43,23 @@ export default async function ProjectDetailPage({
   const activities = (
     <section className="card">
       <div className="card-head"><h2>活動履歴</h2><Link className="button soft" href={`/projects/${id}/activities/new`}>＋ 活動</Link></div>
-      <div className="card-body timeline">
-        {project.activities.length ? project.activities.map((a) => (
-          <div className="timeline-item" key={a.id}>
-            <div className="row-actions">
-              <div className="grow"><div className="small muted">{a.date}　{a.type}</div><div className="list-title">{a.title}</div><div style={{ whiteSpace: "pre-wrap" }}>{a.content}</div></div>
-              <Link className="icon-button edit" title="編集" href={`/projects/${id}/activities/${a.id}/edit`}>✎</Link>
-              <form action={deleteActivity}><input type="hidden" name="id" value={a.id}/><input type="hidden" name="project_id" value={id}/><button className="icon-button" title="削除">×</button></form>
+      <div className="card-body">
+        {query.gmail === "synced" && <div className="notice success-notice" style={{ marginBottom: 14 }}>Gmailを同期しました。{query.count ? ` ${query.count}件を確認しました。` : ""}</div>}
+        {query.gmail === "added" && <div className="notice success-notice" style={{ marginBottom: 14 }}>メールを活動履歴へ追加しました。</div>}
+        {query.gmail === "already_added" && <div className="notice" style={{ marginBottom: 14 }}>このメールはすでに活動履歴へ追加されています。</div>}
+        {query.gmail === "error" && <div className="notice error-notice" style={{ marginBottom: 14 }}>Gmail同期に失敗しました。{query.message ? ` ${query.message}` : ""}</div>}
+        <ProjectGmailPanel projectId={id} summary={gmail}/>
+        <div className="timeline">
+          {project.activities.length ? project.activities.map((a) => (
+            <div className="timeline-item" key={a.id}>
+              <div className="row-actions">
+                <div className="grow"><div className="small muted">{a.date}　{a.type}</div><div className="list-title">{a.title}</div><div style={{ whiteSpace: "pre-wrap" }}>{a.content}</div></div>
+                <Link className="icon-button edit" title="編集" href={`/projects/${id}/activities/${a.id}/edit`}>✎</Link>
+                <form action={deleteActivity}><input type="hidden" name="id" value={a.id}/><input type="hidden" name="project_id" value={id}/><button className="icon-button" title="削除">×</button></form>
+              </div>
             </div>
-          </div>
-        )) : <div className="empty">活動履歴はまだありません。</div>}
+          )) : <div className="empty">活動履歴はまだありません。</div>}
+        </div>
       </div>
     </section>
   );

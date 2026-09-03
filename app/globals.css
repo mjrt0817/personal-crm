@@ -274,3 +274,27 @@ button.task-check.done { background:var(--success); }
   .project-tab-panel { margin-top:12px; }
   .project-tab-panel > .card { min-height:0; }
 }
+
+/* Ver.1.8 Gmail案件連携 */
+.gmail-panel { padding: 0 0 18px; border-bottom:1px solid var(--line); margin-bottom:18px; }
+.gmail-panel-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:8px; }
+.gmail-sync-meta { margin-bottom:10px; }
+.gmail-error { color:var(--danger); }
+.gmail-list { display:grid; gap:8px; }
+.gmail-row { display:flex; gap:14px; align-items:flex-start; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--surface-2); }
+.gmail-row-main { flex:1; min-width:0; }
+.gmail-row-top { display:flex; gap:8px; align-items:center; margin-bottom:5px; }
+.gmail-subject { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gmail-address { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:3px; }
+.gmail-snippet { margin-top:7px; color:var(--text); font-size:13px; line-height:1.55; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.gmail-row-actions { display:flex; flex-direction:column; gap:7px; align-items:stretch; flex:0 0 auto; }
+.gmail-row-actions .button { white-space:nowrap; }
+.gmail-empty { padding:14px 0 2px; }
+@media (max-width: 720px) {
+  .gmail-panel-head { flex-direction:column; }
+  .gmail-panel-head form, .gmail-panel-head .button { width:100%; }
+  .gmail-row { flex-direction:column; }
+  .gmail-row-actions { width:100%; flex-direction:row; flex-wrap:wrap; }
+  .gmail-row-actions > * { flex:1; }
+  .gmail-row-actions .button, .gmail-row-actions .badge { width:100%; }
+}
