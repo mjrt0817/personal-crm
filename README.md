@@ -1,263 +1,107 @@
-# Personal CRM Ver.1.4
+# Personal CRM Ver.1.5
 
 個人用 SFA + CRM + 案件・タスク・スケジュール管理ツールです。
 
-Ver.1.4では Google Calendar との連携を次の段階へ進めています。
+Ver.1.5では、Ver.1.4のGoogle Calendar双方向同期に加えて **Google Drive案件フォルダ連携** を追加しました。
 
-- アプリで予定を新規登録 → Google Calendarへ自動作成
-- アプリで予定を編集 → Google Calendarへ自動更新
-- アプリで予定を削除 → Google Calendarからも自動削除
-- Google Calendar側で変更 → 「Googleから同期」でアプリへ反映
-- Google Calendar側で削除 → 「Googleから同期」でアプリ側も削除
-- Ver.1.3までの「Google Calendarへ登録」ボタンで作成した同名・同時刻予定は、同期時に自動で既存CRM予定と紐付け
-- CRMと無関係なGoogle Calendar予定は取り込まない
+## Ver.1.5の追加機能
 
-> 今回は「CRMに登録した予定」を双方向に保つ方式です。Google Calendarで新しく作った無関係な予定をCRMへ全部取り込む仕様にはしていません。個人・家族予定がCRMへ混ざることを防ぐためです。
+- 案件ごとにGoogle Driveフォルダを紐付け
+- DriveフォルダURLを貼るだけで登録
+- フォルダ名をGoogle Drive APIから自動取得
+- サブフォルダを含めてファイルメタデータを同期
+- 案件詳細に最近更新されたDriveファイルを表示
+- 案件からDriveファイルを1クリックで開く
+- 案件別のDrive専用画面でファイル一覧を確認
+- Drive側でファイルを追加・削除・名称変更した後は「同期」でCRMへ反映
+- Google Drive上の**ファイル本文はSupabaseへ保存しない**
+- Supabaseに保存するのはファイル名・URL・種類・更新日時・パス等のメタデータのみ
 
----
-
-## Ver.1.3からの更新手順
-
-### 1. GitHubへVer.1.4を上書き
-
-ZIPを展開し、`personal-crm-v1.4` フォルダの**中身**を現在のGitHubリポジトリ直下へ上書きしてください。
-
-VercelのGitHub連携により自動デプロイされますが、先に以下のSupabase / Google / Vercel設定も行ってください。
+Google CalendarとGoogle Driveは、同じGoogle OAuth接続を利用します。
 
 ---
 
-## 2. Supabase migrationを実行
+# Ver.1.4からの更新手順
 
-Supabase Dashboardで以下を開きます。
+## 1. Supabase migrationを実行
+
+Supabase Dashboardで
 
 `SQL Editor` → `New query`
 
-次のファイルを全文貼り付けて `Run` してください。
+を開き、次のファイルを全文貼り付けて `Run` してください。
 
-`supabase/migrations/003_google_calendar_sync.sql`
+```text
+supabase/migrations/004_google_drive_integration.sql
+```
 
 追加される主なもの：
 
-- `schedules.google_calendar_id`
-- `schedules.google_sync_status`
-- `schedules.google_sync_error`
-- `schedules.google_updated_at`
-- `schedules.google_html_link`
-- `google_calendar_connections` テーブル
+- `project_drive_folders` テーブル
+- `files.source`
+- `files.external_id`
+- `files.drive_folder_id`
+- `files.mime_type`
+- `files.relative_path`
+- `files.external_modified_at`
+- `files.is_folder`
+- Drive同期用インデックス
+- RLS / authenticated権限
 
-既存の案件・タスク・予定データは削除しません。
+既存の取引先・案件・タスク・予定・Calendar同期データは削除しません。
 
 ---
 
-## 3. Google Calendar APIを有効化
+## 2. Google Drive APIを有効化
 
-Google Cloud Consoleで、Personal CRM用に作成した既存Projectを開きます。
+Google Cloud Consoleで、Personal CRMに使っている既存Projectを開きます。
 
-1. 上部検索で `Google Calendar API` を検索
-2. `Google Calendar API` を開く
+1. 上部検索で `Google Drive API` を検索
+2. `Google Drive API` を開く
 3. `Enable` / `有効にする` を押す
 
-既に有効なら何もしなくて構いません。
+Google Calendar APIとは別のAPIなので、Drive APIも有効化が必要です。
 
 ---
 
-## 4. Google Auth PlatformへCalendar scopeを追加
+## 3. Google Auth PlatformへDrive scopeを追加
 
-Google Cloud Console → `Google Auth Platform` → `Data Access` を開きます。
+Google Cloud Console → `Google Auth Platform` → `Data Access` → `Add or Remove Scopes`
 
-次のscopeを追加してください。
+で、既存のCalendar scopeに加えて次を追加してください。
+
+```text
+https://www.googleapis.com/auth/drive.metadata.readonly
+```
+
+Ver.1.5で利用するGoogle scopeは次の2つです。
 
 ```text
 https://www.googleapis.com/auth/calendar.events
+https://www.googleapis.com/auth/drive.metadata.readonly
 ```
 
-このscopeは、Google Calendarの予定を表示・追加・変更・削除するために使います。
+Drive側では **メタデータ読み取りだけ** を要求します。Drive API経由でファイル本文をダウンロード・保存するための権限は要求していません。
 
-現在アプリがTestingの場合は、これまで通り自分のGoogleアカウントをTest userにしておけば構いません。
-
----
-
-## 5. Vercelへ環境変数を3個追加
-
-既存の4項目はそのまま残します。
-
-```text
-NEXT_PUBLIC_DEMO_MODE=false
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
-ALLOWED_EMAILS=...
-```
-
-追加で以下を設定します。
-
-### GOOGLE_OAUTH_CLIENT_ID
-
-Supabase → Authentication → Google Provider に設定したものと**同じGoogle OAuth Client ID**です。
-
-```text
-GOOGLE_OAUTH_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
-```
-
-### GOOGLE_OAUTH_CLIENT_SECRET
-
-同じOAuth ClientのClient Secretです。
-
-```text
-GOOGLE_OAUTH_CLIENT_SECRET=xxxxxxxx
-```
-
-これは秘密情報です。`NEXT_PUBLIC_` を付けないでください。GitHubにも登録しません。
-
-### GOOGLE_TOKEN_ENCRYPTION_KEY
-
-GoogleのRefresh TokenをSupabaseへ保存する際の暗号化キーです。
-
-32文字以上のランダム値を推奨します。
-
-PowerShellで生成する場合：
-
-```powershell
-$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-$bytes = New-Object byte[] 32
-$rng.GetBytes($bytes)
-[Convert]::ToBase64String($bytes)
-$rng.Dispose()
-```
-
-表示された文字列をそのままValueに設定します。
-
-```text
-GOOGLE_TOKEN_ENCRYPTION_KEY=生成されたランダム文字列
-```
-
-この値もGitHubには登録しません。
+アプリがGoogle Auth PlatformのTesting状態の場合は、これまで通り自分のGoogleアカウントをTest userに登録しておいてください。
 
 ---
 
-## 6. VercelをRedeploy
+## 4. GitHubへVer.1.5を上書き
 
-環境変数追加後、必ず再デプロイしてください。
+ZIPを展開し、`personal-crm-v1.5` フォルダの**中身**を現在のGitHubリポジトリ直下へ上書きしてください。
 
-GitHubへのVer.1.4 push後のDeploymentに3つの新しい環境変数が入っていることを確認します。
+VercelのGitHub連携により自動デプロイされます。
 
----
+### Vercel環境変数
 
-## 7. アプリからGoogle Calendarを接続
-
-Ver.1.4へログイン後、
-
-`設定` → `Google Calendar` → `Google Calendarと接続`
-
-を押します。
-
-Googleの同意画面が表示されます。
-
-Calendarの予定を扱う権限を許可してください。
-
-正常終了すると設定画面に戻り、
-
-```text
-Google Calendar
-接続済み
-```
-
-と表示されます。
-
-この接続操作ではGoogleのRefresh Tokenを取得し、`GOOGLE_TOKEN_ENCRYPTION_KEY` で暗号化してSupabaseへ保存します。
-
----
-
-# 動作確認
-
-## A. アプリ → Google
-
-1. CRMの「スケジュール」から新しい予定を作成
-2. Google Calendarを開く
-3. 同じ予定が自動で作成されていることを確認
-
-その後CRM側でタイトルや時間を変更し、Google側も更新されることを確認します。
-
----
-
-## B. Google → アプリ
-
-1. CRMから作成してGoogleと同期済みの予定をGoogle Calendar側で編集
-2. CRMの「スケジュール」を開く
-3. `Googleから同期` を押す
-4. CRM側へ変更が反映されることを確認
-
-Google Calendar側で予定を削除した場合も、`Googleから同期` 後にCRM側から削除されます。
-
----
-
-## C. Ver.1.3までの旧方式
-
-Ver.1.3の `Google Calendar ↗` から手動作成した予定は、まだGoogle Event IDをCRMが知りません。
-
-Ver.1.4の `Googleから同期` は、
-
-- 件名が同じ
-- 開始時刻が同じ
-
-既存予定を見つけると自動でGoogle Event IDを紐付けます。
-
-一致する予定がGoogle側にない場合、CRM側には「Google未同期」と表示されるので `再同期` を押してください。
-
----
-
-# 同期方針
-
-## アプリ側操作
-
-Google接続済みの場合：
-
-- 新規：自動同期
-- 編集：自動同期
-- 削除：Googleも削除
-
-Google APIが一時的に失敗した場合、CRMの保存自体は維持し、予定に「同期エラー」を表示します。`再同期` から再実行できます。
-
-## Google側操作
-
-Google Calendarは外部サービスのため、Ver.1.4ではCRM画面の `Googleから同期` を押した時に変更を取得します。
-
-常時リアルタイム監視（Google Calendar Push Notifications / Webhook）は次段階候補です。
-
----
-
-# セキュリティ
-
-Google ProviderのRefresh Tokenは強い権限を持つため、平文では保存しません。
-
-Ver.1.4では：
-
-1. GoogleからRefresh Tokenを取得
-2. Vercelサーバー側でAES-256-GCM暗号化
-3. 暗号文だけをSupabaseへ保存
-4. Google APIアクセス時のみサーバー側で復号
-
-という構成です。
-
-以下は絶対にGitHubへコミットしないでください。
-
-- `GOOGLE_OAUTH_CLIENT_SECRET`
-- `GOOGLE_TOKEN_ENCRYPTION_KEY`
-- Supabase Secret key / service_role key
-- Database password
-- `.env.local`
-
-Ver.1.4でもSupabase Secret key / service_role keyは使用しません。
-
----
-
-# 環境変数一覧
+Ver.1.4から追加の環境変数はありません。既存の以下をそのまま利用します。
 
 ```text
 NEXT_PUBLIC_DEMO_MODE=false
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxx
 ALLOWED_EMAILS=your-google-account@example.com
-
 GOOGLE_OAUTH_CLIENT_ID=xxxxx.apps.googleusercontent.com
 GOOGLE_OAUTH_CLIENT_SECRET=xxxxx
 GOOGLE_TOKEN_ENCRYPTION_KEY=xxxxx
@@ -265,10 +109,165 @@ GOOGLE_TOKEN_ENCRYPTION_KEY=xxxxx
 
 ---
 
-# Ver.1.4の次候補
+## 5. Google Workspaceを再接続
 
-- Google Calendar Push Notificationsによる自動取り込み
-- CRM専用Google Calendarの選択・作成
-- Google Drive API連携
-- 案件画面からDriveファイル一覧を自動表示
-- Gmail連携
+**ここは必須です。**
+
+Ver.1.4で保存済みのRefresh TokenにはCalendar権限しか含まれていないため、Drive scopeを追加した後に再認証します。
+
+アプリで
+
+`設定` → `Google Workspace` → `Google Workspaceを再接続`
+
+を押してください。
+
+Googleの同意画面で、CalendarとDriveメタデータへのアクセスを許可します。
+
+`prompt=consent` と `access_type=offline` を指定しているため、新しいscopeを含むRefresh Tokenを取得して暗号化保存します。
+
+---
+
+# Drive連携の使い方
+
+## 案件にDriveフォルダを紐付ける
+
+1. 案件詳細を開く
+2. `Google Drive` セクションを開く
+3. `Google Driveフォルダを紐付け` を押す
+4. Google Driveで案件フォルダを開く
+5. ブラウザのURLをコピー
+6. CRMへ貼り付けて `紐付けて同期`
+
+例：
+
+```text
+https://drive.google.com/drive/folders/xxxxxxxxxxxxxxxx
+```
+
+フォルダIDだけを貼り付けても認識します。
+
+登録時にGoogle Drive APIでフォルダを確認し、フォルダ内のファイルを同期します。
+
+---
+
+## 案件詳細
+
+案件詳細のGoogle Drive欄には、
+
+- 紐付けフォルダ
+- `Driveで開く`
+- `同期`
+- 最近更新されたファイル
+
+が表示されます。
+
+ファイル名をクリックするとGoogle Drive側で開きます。
+
+---
+
+## Drive専用画面
+
+案件詳細 → `ファイル一覧`
+
+から、案件に紐付いたDrive情報をまとめて確認できます。
+
+- 複数フォルダの紐付け
+- 手動同期
+- Driveでフォルダを開く
+- 紐付け解除
+- 同期済みファイル一覧
+
+紐付け解除を行っても **Google Drive上のフォルダやファイルは削除しません。**
+CRM側の関連付けと同期済みメタデータだけを削除します。
+
+---
+
+# 同期範囲
+
+Ver.1.5ではルートフォルダからサブフォルダを再帰的に確認します。
+
+安全性とVercel実行時間を考慮し、1フォルダ連携あたり次を上限としています。
+
+- 最大500項目
+- 最大8階層
+
+大規模フォルダの場合は「上限500件まで」と表示します。
+
+---
+
+# セキュリティ方針
+
+## Google Drive
+
+Supabaseに保存するもの：
+
+- ファイル名
+- Google Drive URL
+- MIME Type / 種別
+- フォルダからの相対パス
+- Google側更新日時
+- Google Drive File ID
+
+保存しないもの：
+
+- ファイル本文
+- Google Docs本文
+- PDF本文
+- Driveの共有権限情報
+
+Google Drive側のアクセス制御はそのまま有効です。CRMにURLが表示されていても、Google側で権限のないファイルを開けるようにはなりません。
+
+## Google OAuth Token
+
+Ver.1.4同様、Refresh Tokenは
+
+1. Vercelサーバー上でAES-256-GCM暗号化
+2. 暗号文のみSupabaseへ保存
+3. Google API利用時だけサーバー側で復号
+
+します。
+
+以下はGitHubへコミットしないでください。
+
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_TOKEN_ENCRYPTION_KEY`
+- Supabase Secret key / service_role key
+- Database password
+- `.env.local`
+
+---
+
+# 動作確認
+
+## Drive
+
+1. Google Drive APIを有効化
+2. `drive.metadata.readonly` scopeを追加
+3. Ver.1.5をDeploy
+4. Google Workspaceを再接続
+5. 案件へDriveフォルダを紐付け
+6. CRMにファイル一覧が表示されることを確認
+7. Driveにテストファイルを追加
+8. CRMで `同期`
+9. 追加したファイルが表示されることを確認
+
+## Calendar
+
+Ver.1.4のCalendar機能はそのまま維持しています。
+
+- CRM予定追加 → Googleへ自動作成
+- CRM予定編集 → Googleへ自動更新
+- CRM予定削除 → Google側も削除
+- Google側変更 → `Googleから同期`
+
+---
+
+# 次段階候補
+
+Ver.1.5確認後は、次の順を想定しています。
+
+1. Google Calendarの自動取り込み（ボタン不要化）
+2. Driveフォルダの自動同期
+3. Gmail連携（案件に関連するメール履歴）
+4. 見積・請求・売上管理
+5. AIによる案件要約・次アクション提案

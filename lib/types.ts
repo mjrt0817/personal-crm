@@ -89,6 +89,34 @@ export type ScheduleDetail = {
   googleHtmlLink?: string;
 };
 
+
+export type ProjectDriveFolder = {
+  id: string;
+  projectId: string;
+  googleFolderId: string;
+  name: string;
+  url: string;
+  lastSyncAt?: string;
+  lastSyncError?: string;
+};
+
+export type ProjectDriveFile = {
+  id: string;
+  driveFolderId: string;
+  name: string;
+  url: string;
+  fileType?: string;
+  mimeType?: string;
+  relativePath?: string;
+  modifiedAt?: string;
+  isFolder: boolean;
+};
+
+export type ProjectDriveSummary = {
+  folders: ProjectDriveFolder[];
+  files: ProjectDriveFile[];
+};
+
 export type GoogleCalendarConnectionStatus = {
   connected: boolean;
   googleEmail?: string;

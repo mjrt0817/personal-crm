@@ -41,7 +41,7 @@ type GoogleEventsResponse = {
   nextPageToken?: string;
 };
 
-const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+import { GOOGLE_CALENDAR_SCOPE } from "@/lib/google-scopes";
 const GOOGLE_API = "https://www.googleapis.com/calendar/v3";
 
 function encryptionKey() {
@@ -413,4 +413,8 @@ export async function revokeGoogleCalendarConnection(supabase: SupabaseLike, use
   if (error) throw new Error(error.message);
 }
 
-export { CALENDAR_SCOPE };
+export async function getGoogleProviderAccessToken(supabase: SupabaseLike, userId: string) {
+  return accessToken(supabase, userId);
+}
+
+export { GOOGLE_CALENDAR_SCOPE };

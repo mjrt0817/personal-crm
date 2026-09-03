@@ -14,25 +14,28 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <div className="page-head"><div><h1>設定</h1><p className="muted">認証・Google連携などを管理します。</p></div></div>
+      <div className="page-head"><div><h1>設定</h1><p className="muted">認証・Google Workspace連携などを管理します。</p></div></div>
 
-      {calendar === "connected" && <div className="notice success-notice">Google Calendarとの接続が完了しました。</div>}
-      {calendar === "disconnected" && <div className="notice">Google Calendarとの接続を解除しました。</div>}
-      {calendar === "save_error" && <div className="notice error-notice">Google Calendarの接続情報を保存できませんでした。Vercel環境変数とDB migrationを確認してください。</div>}
+      {calendar === "connected" && <div className="notice success-notice">Google Workspaceとの接続が完了しました。</div>}
+      {calendar === "disconnected" && <div className="notice">Google Workspaceとの接続を解除しました。</div>}
+      {calendar === "save_error" && <div className="notice error-notice">Google連携情報を保存できませんでした。Vercel環境変数とDB migrationを確認してください。</div>}
 
       <section className="card" style={{ marginBottom: 18 }}>
-        <div className="card-head"><h2>Google Calendar</h2><span className={`badge ${status.connected ? "green" : ""}`}>{status.connected ? "接続済み" : "未接続"}</span></div>
+        <div className="card-head"><h2>Google Workspace</h2><span className={`badge ${status.connected ? "green" : ""}`}>{status.connected ? "接続済み" : "未接続"}</span></div>
         <div className="card-body">
-          <p className="muted">接続すると、アプリで予定を追加・編集・削除した際にGoogle Calendarへ自動反映します。Google側の変更はスケジュール画面の「Googleから同期」で取り込みます。</p>
+          <p className="muted">Google CalendarとGoogle Driveを同じGoogleアカウントで連携します。Calendarは予定の同期、Driveは案件フォルダのファイル一覧取得に利用します。</p>
           <div className="kv"><div className="k">状態</div><div>{status.connected ? "接続済み" : "未接続"}</div></div>
           <div className="kv"><div className="k">Googleアカウント</div><div>{status.googleEmail ?? "—"}</div></div>
+          <div className="kv"><div className="k">Calendar</div><div>予定の作成・更新・削除・同期</div></div>
+          <div className="kv"><div className="k">Drive</div><div>案件フォルダのメタデータ読み取り（ファイル本文は保存しません）</div></div>
           <div className="kv"><div className="k">接続日時</div><div>{formatDateTime(status.connectedAt)}</div></div>
-          <div className="kv"><div className="k">最終同期</div><div>{formatDateTime(status.lastSyncAt)}</div></div>
+          <div className="kv"><div className="k">Calendar最終同期</div><div>{formatDateTime(status.lastSyncAt)}</div></div>
           {status.lastSyncError && <div className="kv"><div className="k">同期エラー</div><div style={{ color: "var(--danger)" }}>{status.lastSyncError}</div></div>}
           <div className="row-actions" style={{ marginTop: 18, flexWrap: "wrap" }}>
             <GoogleCalendarConnectButton connected={status.connected} />
-            {status.connected && <form action={disconnectGoogleCalendar}><button className="button danger" type="submit">接続を解除</button></form>}
+            {status.connected && <form action={disconnectGoogleCalendar}><button className="button danger" type="submit">Google連携を解除</button></form>}
           </div>
+          {status.connected && <p className="small muted" style={{ marginTop: 12 }}>Ver.1.4から更新した場合は、Drive権限を追加するため「Google Workspaceを再接続」を一度実行してください。</p>}
         </div>
       </section>
 

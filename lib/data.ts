@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { companies as demoCompanies, projects as demoProjects, schedules as demoSchedules, tasks as demoTasks } from "@/lib/mock-data";
-import type { Activity, ActivityDetail, Company, CompanyDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ScheduleDetail, Task, TaskDetail } from "@/lib/types";
+import type { Activity, ActivityDetail, Company, CompanyDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ScheduleDetail, Task, TaskDetail } from "@/lib/types";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
@@ -106,6 +106,56 @@ export async function getProjectOptions(): Promise<Array<{ id: string; name: str
   return ((data ?? []) as unknown as Row[]).map((p) => ({
     id: p.id, name: p.name, companyId: p.company_id, companyName: p.companies?.name ?? "取引先未設定"
   }));
+}
+
+export async function getProjectDriveSummary(projectId: string, limit = 12): Promise<ProjectDriveSummary> {
+  if (demoMode) return { folders: [], files: [] };
+
+  const supabase = await createClient();
+  const [folderResult, fileResult] = await Promise.all([
+    supabase
+      .from("project_drive_folders")
+      .select("id,project_id,google_folder_id,name,url,last_sync_at,last_sync_error")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("files")
+      .select("id,drive_folder_id,name,url,file_type,mime_type,relative_path,external_modified_at,is_folder")
+      .eq("project_id", projectId)
+      .eq("source", "google_drive")
+      .eq("is_folder", false)
+      .order("external_modified_at", { ascending: false, nullsFirst: false })
+      .limit(limit)
+  ]);
+
+  // migration前でも案件詳細画面自体は壊さない。
+  if (folderResult.error && ["42P01", "PGRST205"].includes(folderResult.error.code ?? "")) return { folders: [], files: [] };
+  if (folderResult.error) throw new Error(folderResult.error.message);
+  if (fileResult.error && ["42703", "PGRST204"].includes(fileResult.error.code ?? "")) return { folders: [], files: [] };
+  if (fileResult.error) throw new Error(fileResult.error.message);
+
+  return {
+    folders: (folderResult.data ?? []).map((x) => ({
+      id: x.id,
+      projectId: x.project_id,
+      googleFolderId: x.google_folder_id,
+      name: x.name,
+      url: x.url,
+      lastSyncAt: x.last_sync_at ?? undefined,
+      lastSyncError: x.last_sync_error ?? undefined
+    })),
+    files: (fileResult.data ?? []).map((x) => ({
+      id: x.id,
+      driveFolderId: x.drive_folder_id,
+      name: x.name,
+      url: x.url,
+      fileType: x.file_type ?? undefined,
+      mimeType: x.mime_type ?? undefined,
+      relativePath: x.relative_path ?? undefined,
+      modifiedAt: x.external_modified_at ?? undefined,
+      isFolder: Boolean(x.is_folder)
+    }))
+  };
 }
 
 export async function getProjectBase(id: string): Promise<Project | null> {

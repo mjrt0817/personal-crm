@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     { onConflict:"user_id,name", ignoreDuplicates:true }
   );
 
-  // Calendar権限付きで再認証した場合だけ、Google refresh tokenを暗号化して保存する。
+  // Calendar / Drive権限付きで再認証した場合、Google refresh tokenを暗号化して保存する。
   const providerRefreshToken = sessionData.session?.provider_refresh_token;
   if (providerRefreshToken) {
     try {

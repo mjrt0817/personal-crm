@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { deleteScheduleFromGoogle, pullGoogleCalendar, revokeGoogleCalendarConnection, syncScheduleToGoogle } from "@/lib/google-calendar-server";
+import { registerProjectDriveFolder, syncProjectDriveFolder } from "@/lib/google-drive-server";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
@@ -94,6 +95,11 @@ function invalidateScheduleMutation(projectId?: string | null) {
 
 function invalidateLinkMutation(projectId: string) {
   revalidatePath(`/projects/${projectId}`);
+}
+
+function invalidateDriveMutation(projectId: string) {
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/drive`);
 }
 
 export async function createCompany(formData: FormData) {
@@ -571,6 +577,52 @@ export async function disconnectGoogleCalendar() {
   revalidatePath("/settings");
   revalidatePath("/schedule");
   redirect("/settings?calendar=disconnected");
+}
+
+export async function createProjectDriveFolder(formData: FormData) {
+  const projectId = required(formData, "project_id", "案件ID");
+  if (demoMode) demoReturn(formData, `/projects/${projectId}/drive`);
+  const { supabase, userId } = await authed();
+  let target = `/projects/${projectId}/drive?drive=error`;
+  try {
+    const result = await registerProjectDriveFolder(supabase, userId, projectId, required(formData, "folder_url", "Google DriveフォルダURL"));
+    invalidateDriveMutation(projectId);
+    const qs = new URLSearchParams({ drive: "added", count: String(result.count), truncated: result.truncated ? "1" : "0" });
+    target = `/projects/${projectId}/drive?${qs.toString()}`;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Google Driveフォルダを登録できませんでした。";
+    target = `/projects/${projectId}/drive/new?error=${encodeURIComponent(message)}`;
+  }
+  redirect(target);
+}
+
+export async function syncProjectDriveFolderNow(formData: FormData) {
+  const projectId = required(formData, "project_id", "案件ID");
+  const folderId = required(formData, "drive_folder_id", "DriveフォルダID");
+  if (demoMode) demoReturn(formData, `/projects/${projectId}/drive`);
+  const { supabase, userId } = await authed();
+  let target = `/projects/${projectId}/drive?drive=error`;
+  try {
+    const result = await syncProjectDriveFolder(supabase, userId, folderId);
+    invalidateDriveMutation(projectId);
+    const qs = new URLSearchParams({ drive: "synced", count: String(result.count), truncated: result.truncated ? "1" : "0" });
+    target = `/projects/${projectId}/drive?${qs.toString()}`;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Google Drive同期に失敗しました。";
+    target = `/projects/${projectId}/drive?drive=error&message=${encodeURIComponent(message)}`;
+  }
+  redirect(target);
+}
+
+export async function deleteProjectDriveFolder(formData: FormData) {
+  const projectId = required(formData, "project_id", "案件ID");
+  const folderId = required(formData, "drive_folder_id", "DriveフォルダID");
+  if (demoMode) demoReturn(formData, `/projects/${projectId}/drive`);
+  const { supabase } = await authed();
+  const { error } = await supabase.from("project_drive_folders").delete().eq("id", folderId).eq("project_id", projectId);
+  if (error) throw new Error(error.message);
+  invalidateDriveMutation(projectId);
+  redirect(`/projects/${projectId}/drive?drive=removed`);
 }
 
 export async function createContact(formData: FormData) {
