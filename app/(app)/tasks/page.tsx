@@ -26,6 +26,7 @@ export default async function TasksPage() {
               <span className={`badge ${t.status === "waiting" ? "orange" : t.status === "completed" ? "green" : ""}`}>{statusName[t.status]}</span>
               <span className="badge">{priorityName[t.priority]}</span>
               <span className="small muted">{t.due}</span>
+              <Link className="icon-button edit" title="編集" href={`/tasks/${t.id}/edit`}>✎</Link>
               <form action={deleteTask}><input type="hidden" name="id" value={t.id}/>{t.projectId && <input type="hidden" name="project_id" value={t.projectId}/>}<button className="icon-button">×</button></form>
             </div>
           ))}

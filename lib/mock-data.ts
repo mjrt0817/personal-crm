@@ -97,6 +97,6 @@ export const companies: Company[] = [
 ];
 
 export const schedules = [
-  { id: "s1", date: "2026-09-15", time: "16:00–17:30", title: "第2回訪問", company: "有限会社ロジステック", projectId: "logistech-dx" },
-  { id: "s2", date: "2026-09-08", time: "10:00–11:00", title: "Web改善打合せ", company: "株式会社サンプル", projectId: "web-renewal" }
+  { id: "s1", date: "2026-09-15", time: "16:00–17:30", title: "第2回訪問", company: "有限会社ロジステック", projectId: "logistech-dx", startAt: "2026-09-15T07:00:00.000Z", endAt: "2026-09-15T08:30:00.000Z", allDay: false, location: "", description: "DXコンシェルジュ支援" },
+  { id: "s2", date: "2026-09-08", time: "10:00–11:00", title: "Web改善打合せ", company: "株式会社サンプル", projectId: "web-renewal", startAt: "2026-09-08T01:00:00.000Z", endAt: "2026-09-08T02:00:00.000Z", allDay: false, location: "", description: "" }
 ];

@@ -42,6 +42,49 @@ export type Task = {
   due: string;
 };
 
+export type TaskDetail = {
+  id: string;
+  title: string;
+  description?: string;
+  memo?: string;
+  projectId?: string;
+  companyId?: string;
+  status: TaskStatus;
+  priority: Priority;
+  startDate?: string;
+  dueAt?: string;
+};
+
+export type ProjectLinkDetail = ProjectLink & {
+  projectId: string;
+  memo?: string;
+};
+
+export type ActivityDetail = {
+  id: string;
+  companyId: string;
+  projectId?: string;
+  contactId?: string;
+  activityType: string;
+  activityAt: string;
+  title?: string;
+  content: string;
+  nextAction?: string;
+};
+
+export type ScheduleDetail = {
+  id: string;
+  companyId?: string;
+  projectId?: string;
+  title: string;
+  scheduleType: string;
+  startAt: string;
+  endAt?: string;
+  allDay: boolean;
+  location?: string;
+  description?: string;
+};
+
 
 export type ProjectHeader = {
   id: string;

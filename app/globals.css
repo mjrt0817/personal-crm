@@ -193,3 +193,12 @@ button.task-check.done { background:var(--success); }
 @keyframes skeleton-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (max-width:980px) { .loading-bar { top:58px; left:0; } }
 @media (max-width:620px) { .skeleton-grid { grid-template-columns:1fr; } }
+
+/* Ver.1.3: list-row edit affordance */
+.icon-button { display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.icon-button.edit:hover { background:var(--accent-soft); color:var(--accent); }
+.row-action-group { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+@media (max-width:760px) {
+  .row-action-group { width:100%; justify-content:flex-end; padding-top:4px; }
+  .row-action-group .button { padding:8px 10px; font-size:13px; }
+}

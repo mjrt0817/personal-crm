@@ -53,6 +53,18 @@ async function authed() {
   return { supabase, userId: String(userId) };
 }
 
+async function resolveCompanyIdForProject(supabase: Awaited<ReturnType<typeof createClient>>, projectId: string | null, fallback: string | null) {
+  if (!projectId) return fallback;
+  const { data, error } = await supabase.from("projects").select("company_id").eq("id", projectId).single();
+  if (error) throw new Error(error.message);
+  return data.company_id as string;
+}
+
+function returnTarget(formData: FormData, fallback: string) {
+  const candidate = text(formData, "return_to");
+  return candidate.startsWith("/") && !candidate.startsWith("//") ? candidate : fallback;
+}
+
 function invalidateProjectMutation(projectId?: string | null) {
   revalidatePath("/dashboard");
   revalidatePath("/projects");
@@ -238,6 +250,52 @@ export async function createProjectLink(formData: FormData) {
   redirect(`/projects/${projectId}#links`);
 }
 
+export async function updateProjectLink(formData: FormData) {
+  const id = required(formData, "id", "リンクID");
+  const projectId = required(formData, "project_id", "案件ID");
+  if (demoMode) demoReturn(formData, `/projects/${projectId}`);
+  const { supabase } = await authed();
+  const { data: existing, error: existingError } = await supabase
+    .from("project_links")
+    .select("is_pinned,pin_order")
+    .eq("id", id)
+    .eq("project_id", projectId)
+    .single();
+  if (existingError) throw new Error(existingError.message);
+
+  const pinned = checkbox(formData, "is_pinned");
+  let pinOrder: number | null = null;
+  if (pinned) {
+    if (existing.is_pinned && existing.pin_order) {
+      pinOrder = existing.pin_order;
+    } else {
+      const { data: current, error: pinError } = await supabase
+        .from("project_links")
+        .select("pin_order")
+        .eq("project_id", projectId)
+        .eq("is_pinned", true)
+        .neq("id", id);
+      if (pinError) throw new Error(pinError.message);
+      const used = new Set((current ?? []).map((x) => x.pin_order).filter(Boolean));
+      const available = [1, 2, 3, 4].find((n) => !used.has(n));
+      if (!available) throw new Error("クイックリンクは最大4件です。");
+      pinOrder = available;
+    }
+  }
+
+  const { error } = await supabase.from("project_links").update({
+    name: required(formData, "name", "表示名"),
+    url: required(formData, "url", "URL"),
+    link_type: text(formData, "link_type") || "other",
+    memo: optional(formData, "memo"),
+    is_pinned: pinned,
+    pin_order: pinOrder
+  }).eq("id", id).eq("project_id", projectId);
+  if (error) throw new Error(error.message);
+  invalidateLinkMutation(projectId);
+  redirect(returnTarget(formData, `/projects/${projectId}#links`));
+}
+
 export async function deleteProjectLink(formData: FormData) {
   const id = required(formData, "id", "リンクID");
   const projectId = required(formData, "project_id", "案件ID");
@@ -251,9 +309,9 @@ export async function deleteProjectLink(formData: FormData) {
 
 export async function createTask(formData: FormData) {
   const projectId = optional(formData, "project_id");
-  const companyId = optional(formData, "company_id");
   if (demoMode) demoReturn(formData, projectId ? `/projects/${projectId}` : "/tasks");
   const { supabase, userId } = await authed();
+  const companyId = await resolveCompanyIdForProject(supabase, projectId, optional(formData, "company_id"));
   const { error } = await supabase.from("tasks").insert({
     user_id: userId,
     company_id: companyId,
@@ -269,6 +327,32 @@ export async function createTask(formData: FormData) {
   if (error) throw new Error(error.message);
   invalidateTaskMutation(projectId);
   redirect(projectId ? `/projects/${projectId}#tasks` : "/tasks");
+}
+
+export async function updateTask(formData: FormData) {
+  const id = required(formData, "id", "タスクID");
+  const projectId = optional(formData, "project_id");
+  const oldProjectId = optional(formData, "old_project_id");
+  if (demoMode) demoReturn(formData, returnTarget(formData, projectId ? `/projects/${projectId}#tasks` : "/tasks"));
+  const { supabase } = await authed();
+  const companyId = await resolveCompanyIdForProject(supabase, projectId, optional(formData, "company_id"));
+  const status = text(formData, "status") || "todo";
+  const { error } = await supabase.from("tasks").update({
+    company_id: companyId,
+    project_id: projectId,
+    title: required(formData, "title", "タスク名"),
+    description: optional(formData, "description"),
+    status,
+    priority: text(formData, "priority") || "medium",
+    start_date: optional(formData, "start_date"),
+    due_at: jstDateTimeOrNull(formData, "due_at"),
+    completed_at: status === "completed" ? new Date().toISOString() : null,
+    memo: optional(formData, "memo")
+  }).eq("id", id);
+  if (error) throw new Error(error.message);
+  invalidateTaskMutation(oldProjectId);
+  if (projectId && projectId !== oldProjectId) invalidateTaskMutation(projectId);
+  redirect(returnTarget(formData, projectId ? `/projects/${projectId}#tasks` : "/tasks"));
 }
 
 export async function setTaskStatus(formData: FormData) {
@@ -342,6 +426,38 @@ export async function createActivity(formData: FormData) {
   redirect(projectId ? `/projects/${projectId}#activities` : "/dashboard");
 }
 
+export async function updateActivity(formData: FormData) {
+  const id = required(formData, "id", "活動ID");
+  const projectId = optional(formData, "project_id");
+  const oldProjectId = optional(formData, "old_project_id");
+  if (demoMode) demoReturn(formData, returnTarget(formData, projectId ? `/projects/${projectId}#activities` : "/dashboard"));
+  const { supabase } = await authed();
+  const companyId = required(formData, "company_id", "取引先");
+  const nextAction = optional(formData, "next_action");
+  const nextActionDue = jstDateTimeOrNull(formData, "next_action_due");
+  const { error } = await supabase.from("activities").update({
+    company_id: companyId,
+    project_id: projectId,
+    contact_id: optional(formData, "contact_id"),
+    activity_type: text(formData, "activity_type") || "other",
+    activity_at: jstDateTimeOrNull(formData, "activity_at") || new Date().toISOString(),
+    title: optional(formData, "title"),
+    content: required(formData, "content", "活動内容"),
+    next_action: nextAction
+  }).eq("id", id);
+  if (error) throw new Error(error.message);
+
+  const updateProject = Boolean(projectId && checkbox(formData, "update_project_next_action") && nextAction);
+  if (updateProject && projectId) {
+    const { error: updateError } = await supabase.from("projects").update({ next_action: nextAction, next_action_due: nextActionDue }).eq("id", projectId);
+    if (updateError) throw new Error(updateError.message);
+  }
+  invalidateActivityMutation(oldProjectId, false);
+  if (projectId && projectId !== oldProjectId) invalidateActivityMutation(projectId, updateProject);
+  else if (projectId) invalidateActivityMutation(projectId, updateProject);
+  redirect(returnTarget(formData, projectId ? `/projects/${projectId}#activities` : "/dashboard"));
+}
+
 export async function deleteActivity(formData: FormData) {
   const id = required(formData, "id", "活動ID");
   const projectId = optional(formData, "project_id");
@@ -357,9 +473,10 @@ export async function createSchedule(formData: FormData) {
   const projectId = optional(formData, "project_id");
   if (demoMode) demoReturn(formData, projectId ? `/projects/${projectId}` : "/schedule");
   const { supabase, userId } = await authed();
+  const companyId = await resolveCompanyIdForProject(supabase, projectId, optional(formData, "company_id"));
   const { error } = await supabase.from("schedules").insert({
     user_id: userId,
-    company_id: optional(formData, "company_id"),
+    company_id: companyId,
     project_id: projectId,
     title: required(formData, "title", "件名"),
     schedule_type: text(formData, "schedule_type") || "other",
@@ -372,6 +489,30 @@ export async function createSchedule(formData: FormData) {
   if (error) throw new Error(error.message);
   invalidateScheduleMutation(projectId);
   redirect(projectId ? `/projects/${projectId}#schedule` : "/schedule");
+}
+
+export async function updateSchedule(formData: FormData) {
+  const id = required(formData, "id", "予定ID");
+  const projectId = optional(formData, "project_id");
+  const oldProjectId = optional(formData, "old_project_id");
+  if (demoMode) demoReturn(formData, returnTarget(formData, projectId ? `/projects/${projectId}#schedule` : "/schedule"));
+  const { supabase } = await authed();
+  const companyId = await resolveCompanyIdForProject(supabase, projectId, optional(formData, "company_id"));
+  const { error } = await supabase.from("schedules").update({
+    company_id: companyId,
+    project_id: projectId,
+    title: required(formData, "title", "件名"),
+    schedule_type: text(formData, "schedule_type") || "other",
+    start_at: jstDateTimeOrNull(formData, "start_at") ?? (() => { throw new Error("開始日時は必須です。"); })(),
+    end_at: jstDateTimeOrNull(formData, "end_at"),
+    all_day: checkbox(formData, "all_day"),
+    location: optional(formData, "location"),
+    description: optional(formData, "description")
+  }).eq("id", id);
+  if (error) throw new Error(error.message);
+  invalidateScheduleMutation(oldProjectId);
+  if (projectId && projectId !== oldProjectId) invalidateScheduleMutation(projectId);
+  redirect(returnTarget(formData, projectId ? `/projects/${projectId}#schedule` : "/schedule"));
 }
 
 export async function deleteSchedule(formData: FormData) {

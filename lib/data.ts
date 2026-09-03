@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { companies as demoCompanies, projects as demoProjects, schedules as demoSchedules, tasks as demoTasks } from "@/lib/mock-data";
-import type { Activity, Company, CompanyDetail, FormOptions, Project, ProjectHeader, ProjectLink, Task } from "@/lib/types";
+import type { Activity, ActivityDetail, Company, CompanyDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ScheduleDetail, Task, TaskDetail } from "@/lib/types";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
@@ -66,6 +66,12 @@ function mapProject(row: RawProject): Project {
     activities: [],
     tasks: []
   };
+}
+
+
+function toJstDateTimeLocal(value: string | null | undefined) {
+  if (!value) return undefined;
+  return new Date(value).toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" }).slice(0, 16).replace(" ", "T");
 }
 
 export async function getProjects(): Promise<Project[]> {
@@ -204,6 +210,98 @@ export async function getProject(id: string): Promise<Project | null> {
   return project;
 }
 
+export async function getTaskDetail(id: string): Promise<TaskDetail | null> {
+  if (demoMode) {
+    const task = demoTasks.find((t) => t.id === id);
+    if (!task) return null;
+    return { id: task.id, title: task.title, projectId: task.projectId, status: task.status, priority: task.priority };
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("id,title,description,memo,project_id,company_id,status,priority,start_date,due_at")
+    .eq("id", id)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  return {
+    id: data.id,
+    title: data.title,
+    description: data.description ?? undefined,
+    memo: data.memo ?? undefined,
+    projectId: data.project_id ?? undefined,
+    companyId: data.company_id ?? undefined,
+    status: data.status,
+    priority: data.priority,
+    startDate: data.start_date ?? undefined,
+    dueAt: toJstDateTimeLocal(data.due_at)
+  } as TaskDetail;
+}
+
+export async function getProjectLinkDetail(id: string): Promise<ProjectLinkDetail | null> {
+  if (demoMode) {
+    for (const project of demoProjects) {
+      const link = project.links.find((x) => x.id === id);
+      if (link) return { ...link, projectId: project.id };
+    }
+    return null;
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("project_links")
+    .select("id,project_id,name,url,link_type,memo,is_pinned,pin_order")
+    .eq("id", id)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  return {
+    id: data.id, projectId: data.project_id, name: data.name, url: data.url, linkType: data.link_type,
+    memo: data.memo ?? undefined, pinned: data.is_pinned, pinOrder: data.pin_order ?? undefined
+  };
+}
+
+export async function getActivityDetail(id: string): Promise<ActivityDetail | null> {
+  if (demoMode) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("activities")
+    .select("id,company_id,project_id,contact_id,activity_type,activity_at,title,content,next_action")
+    .eq("id", id)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  return {
+    id: data.id, companyId: data.company_id, projectId: data.project_id ?? undefined, contactId: data.contact_id ?? undefined,
+    activityType: data.activity_type, activityAt: toJstDateTimeLocal(data.activity_at) ?? "", title: data.title ?? undefined,
+    content: data.content, nextAction: data.next_action ?? undefined
+  };
+}
+
+export async function getScheduleDetail(id: string): Promise<ScheduleDetail | null> {
+  if (demoMode) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("schedules")
+    .select("id,company_id,project_id,title,schedule_type,start_at,end_at,all_day,location,description")
+    .eq("id", id)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  return {
+    id: data.id, companyId: data.company_id ?? undefined, projectId: data.project_id ?? undefined, title: data.title,
+    scheduleType: data.schedule_type, startAt: toJstDateTimeLocal(data.start_at) ?? "", endAt: toJstDateTimeLocal(data.end_at),
+    allDay: data.all_day, location: data.location ?? undefined, description: data.description ?? undefined
+  };
+}
+
 export async function getTasks(): Promise<Task[]> {
   if (demoMode) return demoTasks;
   const supabase = await createClient();
@@ -257,12 +355,12 @@ export async function getSchedules() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("schedules")
-    .select("id,start_at,end_at,title,project_id,companies(name)")
+    .select("id,start_at,end_at,title,project_id,all_day,location,description,companies(name)")
     .order("start_at", { ascending: true })
     .limit(100);
   if (error) throw new Error(error.message);
 
-  type RawSchedule = {id:string;start_at:string;end_at:string|null;title:string;project_id:string|null;companies:{name:string}|null};
+  type RawSchedule = {id:string;start_at:string;end_at:string|null;title:string;project_id:string|null;all_day:boolean;location:string|null;description:string|null;companies:{name:string}|null};
   return ((data ?? []) as unknown as RawSchedule[]).map((s) => {
     const start = new Date(s.start_at);
     const end = s.end_at ? new Date(s.end_at) : null;
@@ -274,7 +372,12 @@ export async function getSchedules() {
       time,
       title:s.title,
       company:s.companies?.name ?? "—",
-      projectId:s.project_id ?? ""
+      projectId:s.project_id ?? "",
+      startAt:s.start_at,
+      endAt:s.end_at,
+      allDay:s.all_day,
+      location:s.location ?? "",
+      description:s.description ?? ""
     };
   });
 }
