@@ -25,7 +25,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
     {sync === "ok" && <div className="notice success-notice">Google Calendarを同期しました。連携予定の更新 {p(params,"updated")}件 / 旧方式の予定と紐付け {p(params,"linked")}件 / Google側の削除反映 {p(params,"deleted")}件 / CRM対象外 {p(params,"skipped")}件</div>}
     {sync === "error" && <div className="notice error-notice">Google Calendar同期に失敗しました：{p(params,"message") || "設定を確認してください。"}</div>}
-    {calendar.connected && <div className="sync-strip"><span className="badge green">Google接続済み</span><span className="small muted">アプリ側の追加・編集・削除は自動反映。Google側で変更した後は「Googleから同期」を押してください。</span></div>}
+    {calendar.connected && <div className="sync-strip"><span className={`badge ${calendar.lastSyncError ? "red" : "green"}`}>{calendar.lastSyncError ? "Google同期エラー" : "自動同期 ON"}</span><span className="small muted">アプリ側の追加・編集・削除は即時反映。Google側の変更もアプリ利用中は約5分間隔で自動取得します。「Googleから同期」は今すぐ反映したい時の手動同期です。</span>{calendar.lastSyncAt && <span className="small muted">最終：{new Date(calendar.lastSyncAt).toLocaleString("ja-JP",{timeZone:"Asia/Tokyo"})}</span>}</div>}
 
     <section className="card">
       {schedules.length === 0 ? <div className="empty">予定はまだありません。</div> : <div className="list">{schedules.map(s => <div className="list-row" key={s.id}>

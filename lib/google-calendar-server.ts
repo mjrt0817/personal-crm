@@ -76,11 +76,11 @@ function googleCredentials() {
 async function getConnection(supabase: SupabaseLike, userId: string) {
   const { data, error } = await supabase
     .from("google_calendar_connections")
-    .select("refresh_token_encrypted")
+    .select("refresh_token_encrypted,last_sync_at,last_sync_error")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return data as { refresh_token_encrypted: string } | null;
+  return data as { refresh_token_encrypted: string; last_sync_at: string | null; last_sync_error: string | null } | null;
 }
 
 async function accessToken(supabase: SupabaseLike, userId: string) {
@@ -276,8 +276,13 @@ function sameMinute(a: string, b: string) {
   return Math.abs(new Date(a).getTime() - new Date(b).getTime()) < 60_000;
 }
 
+type PullGoogleCalendarOptions = {
+  /** 自動同期時は前回同期後に更新されたイベントだけを取得する。 */
+  incremental?: boolean;
+};
+
 /** Googleのprimaryカレンダーを取り込み、既存予定は更新する。 */
-export async function pullGoogleCalendar(supabase: SupabaseLike, userId: string) {
+export async function pullGoogleCalendar(supabase: SupabaseLike, userId: string, options: PullGoogleCalendarOptions = {}) {
   const connection = await getConnection(supabase, userId);
   if (!connection) throw new Error("Google Calendarが未接続です。");
 
@@ -291,6 +296,11 @@ export async function pullGoogleCalendar(supabase: SupabaseLike, userId: string)
     const events: GoogleEvent[] = [];
     let pageToken = "";
 
+    // 自動同期では前回同期時刻から少し重ねて取り込むことで、通信タイミング境界の取りこぼしを避ける。
+    const updatedMin = options.incremental && connection.last_sync_at
+      ? new Date(new Date(connection.last_sync_at).getTime() - 2 * 60 * 1000).toISOString()
+      : "";
+
     do {
       const qs = new URLSearchParams({
         timeMin,
@@ -299,6 +309,7 @@ export async function pullGoogleCalendar(supabase: SupabaseLike, userId: string)
         showDeleted: "true",
         maxResults: "2500"
       });
+      if (updatedMin) qs.set("updatedMin", updatedMin);
       if (pageToken) qs.set("pageToken", pageToken);
       const page = await googleFetch<GoogleEventsResponse>(token, `/calendars/primary/events?${qs.toString()}`);
       events.push(...(page.items ?? []));

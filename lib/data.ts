@@ -561,3 +561,134 @@ export async function getCompany(id: string): Promise<CompanyDetail | null> {
     projects:c.projects.filter((x) => !x.is_archived).map((x) => ({ id:x.id, name:x.name, status:x.status, nextAction:x.next_action ?? undefined }))
   };
 }
+
+/** Ver.1.6 ダッシュボード専用。必要な列・件数だけをまとめて取得する。 */
+export async function getDashboardSnapshot() {
+  if (demoMode) {
+    const today = new Date().toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" });
+    return {
+      activeProjectCount: demoProjects.filter((p) => !["completed", "lost"].includes(p.status)).length,
+      unfinishedTaskCount: demoTasks.filter((t) => t.status !== "completed").length,
+      todayScheduleCount: demoSchedules.filter((s) => s.date === today).length,
+      overdueTaskCount: 0,
+      todaySchedules: demoSchedules.filter((s) => s.date === today).slice(0, 6),
+      upcomingSchedules: demoSchedules.slice(0, 8),
+      overdueTasks: [],
+      staleProjects: [],
+      noNextProjects: demoProjects.filter((p) => !["completed", "lost"].includes(p.status) && !p.nextAction).slice(0, 4),
+      recentProjects: demoProjects.slice(0, 8),
+      recentDriveFiles: [] as Array<{ id: string; name: string; url: string; fileType?: string; modifiedAt?: string; projectId?: string; projectName?: string; companyName?: string }>
+    };
+  }
+
+  const supabase = await createClient();
+  const now = Date.now();
+  const jstNow = new Date(now + 9 * 60 * 60 * 1000);
+  const date = jstNow.toISOString().slice(0, 10);
+  const todayStart = new Date(`${date}T00:00:00+09:00`).toISOString();
+  const tomorrowStart = new Date(new Date(`${date}T00:00:00+09:00`).getTime() + 24 * 60 * 60 * 1000).toISOString();
+  const staleCutoff = new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const activeStatuses: Project["status"][] = ["consultation", "hearing", "preparing", "proposed", "considering", "ordered", "in_progress", "on_hold"];
+
+  const [scheduleResult, taskResult, projectResult, activityResult, driveResult] = await Promise.all([
+    supabase
+      .from("schedules")
+      .select("id,start_at,end_at,title,project_id,all_day,location,description,google_sync_status,google_html_link,companies(name)")
+      .gte("start_at", todayStart)
+      .order("start_at", { ascending: true })
+      .limit(40),
+    supabase
+      .from("tasks")
+      .select("id,title,status,priority,due_at,project_id,projects(name,companies(name))")
+      .neq("status", "completed")
+      .order("due_at", { ascending: true, nullsFirst: false })
+      .limit(300),
+    supabase
+      .from("projects")
+      .select("id,name,status,priority,next_action,next_action_due,created_at,updated_at,company_id,companies(name),project_categories(name)")
+      .eq("is_archived", false)
+      .in("status", activeStatuses)
+      .order("updated_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("activities")
+      .select("project_id,activity_at")
+      .not("project_id", "is", null)
+      .gte("activity_at", staleCutoff)
+      .limit(1000),
+    supabase
+      .from("files")
+      .select("id,name,url,file_type,relative_path,external_modified_at,project_id,projects(name,companies(name))")
+      .eq("source", "google_drive")
+      .eq("is_folder", false)
+      .order("external_modified_at", { ascending: false, nullsFirst: false })
+      .limit(8)
+  ]);
+
+  for (const result of [scheduleResult, taskResult, projectResult, activityResult, driveResult]) {
+    if (result.error) {
+      // Drive migration前だけは最近ファイルを空扱いにする。
+      if (result === driveResult && ["42703", "PGRST204"].includes(result.error.code ?? "")) continue;
+      throw new Error(result.error.message);
+    }
+  }
+
+  type S = { id:string;start_at:string;end_at:string|null;title:string;project_id:string|null;all_day:boolean;location:string|null;description:string|null;google_sync_status:string;google_html_link:string|null;companies:{name:string}|null };
+  const schedules = ((scheduleResult.data ?? []) as unknown as S[]).map((s) => {
+    const start = new Date(s.start_at);
+    const end = s.end_at ? new Date(s.end_at) : null;
+    return {
+      id:s.id,
+      date:start.toLocaleDateString("ja-JP", { timeZone:"Asia/Tokyo" }),
+      time:s.all_day ? "終日" : start.toLocaleTimeString("ja-JP", { timeZone:"Asia/Tokyo", hour:"2-digit", minute:"2-digit" }) + (end ? `–${end.toLocaleTimeString("ja-JP", { timeZone:"Asia/Tokyo", hour:"2-digit", minute:"2-digit" })}` : ""),
+      title:s.title,
+      company:s.companies?.name ?? "—",
+      projectId:s.project_id ?? "",
+      startAt:s.start_at,
+      googleSyncStatus:s.google_sync_status ?? "not_synced",
+      googleHtmlLink:s.google_html_link ?? ""
+    };
+  });
+
+  type T = { id:string;title:string;status:Task["status"];priority:Task["priority"];due_at:string|null;project_id:string|null;projects:{name:string;companies:{name:string}|null}|null };
+  const tasks = ((taskResult.data ?? []) as unknown as T[]).map((t) => ({
+    id:t.id, title:t.title, status:t.status, priority:t.priority, dueAt:t.due_at,
+    projectId:t.project_id ?? undefined, projectName:t.projects?.name, companyName:t.projects?.companies?.name
+  }));
+
+  type P = { id:string;name:string;status:Project["status"];priority:Project["priority"];next_action:string|null;next_action_due:string|null;created_at:string;updated_at:string;company_id:string;companies:{name:string}|null;project_categories:{name:string}|null };
+  const projects = ((projectResult.data ?? []) as unknown as P[]).map((p) => ({
+    id:p.id, name:p.name, companyId:p.company_id, companyName:p.companies?.name ?? "取引先未設定",
+    category:p.project_categories?.name ?? "その他", status:p.status, priority:p.priority,
+    nextAction:p.next_action ?? undefined, nextActionDue:p.next_action_due ?? undefined,
+    createdAt:p.created_at, updatedAt:p.updated_at
+  }));
+
+  const recentlyActive = new Set(((activityResult.data ?? []) as Array<{ project_id:string|null }>).map((a) => a.project_id).filter(Boolean));
+  const overdueAll = tasks.filter((t) => t.dueAt && new Date(t.dueAt) < new Date(todayStart));
+  const overdueTasks = overdueAll.slice(0, 6);
+  const staleProjects = projects.filter((p) => new Date(p.createdAt) < new Date(staleCutoff) && !recentlyActive.has(p.id)).slice(0, 6);
+  const noNextProjects = projects.filter((p) => !p.nextAction).slice(0, 5);
+  const todayAll = schedules.filter((s) => new Date(s.startAt) < new Date(tomorrowStart));
+
+  type D = { id:string;name:string;url:string;file_type:string|null;relative_path:string|null;external_modified_at:string|null;project_id:string|null;projects:{name:string;companies:{name:string}|null}|null };
+  const recentDriveFiles = ((driveResult.data ?? []) as unknown as D[]).map((f) => ({
+    id:f.id, name:f.name, url:f.url, fileType:f.file_type ?? undefined, relativePath:f.relative_path ?? undefined,
+    modifiedAt:f.external_modified_at ?? undefined, projectId:f.project_id ?? undefined,
+    projectName:f.projects?.name, companyName:f.projects?.companies?.name
+  }));
+
+  return {
+    activeProjectCount: projects.length,
+    unfinishedTaskCount: tasks.length,
+    todayScheduleCount: todayAll.length,
+    overdueTaskCount: overdueAll.length,
+    todaySchedules: todayAll.slice(0, 6),
+    upcomingSchedules: schedules.slice(0, 8),
+    overdueTasks,
+    staleProjects,
+    noNextProjects,
+    recentProjects: projects.slice(0, 8),
+    recentDriveFiles
+  };
+}

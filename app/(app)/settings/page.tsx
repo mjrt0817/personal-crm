@@ -26,7 +26,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <p className="muted">Google CalendarとGoogle Driveを同じGoogleアカウントで連携します。Calendarは予定の同期、Driveは案件フォルダのファイル一覧取得に利用します。</p>
           <div className="kv"><div className="k">状態</div><div>{status.connected ? "接続済み" : "未接続"}</div></div>
           <div className="kv"><div className="k">Googleアカウント</div><div>{status.googleEmail ?? "—"}</div></div>
-          <div className="kv"><div className="k">Calendar</div><div>予定の作成・更新・削除・同期</div></div>
+          <div className="kv"><div className="k">Calendar</div><div>予定の作成・更新・削除＋アプリ利用中の約5分間隔自動同期</div></div>
           <div className="kv"><div className="k">Drive</div><div>案件フォルダのメタデータ読み取り（ファイル本文は保存しません）</div></div>
           <div className="kv"><div className="k">接続日時</div><div>{formatDateTime(status.connectedAt)}</div></div>
           <div className="kv"><div className="k">Calendar最終同期</div><div>{formatDateTime(status.lastSyncAt)}</div></div>
@@ -35,7 +35,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <GoogleCalendarConnectButton connected={status.connected} />
             {status.connected && <form action={disconnectGoogleCalendar}><button className="button danger" type="submit">Google連携を解除</button></form>}
           </div>
-          {status.connected && <p className="small muted" style={{ marginTop: 12 }}>Ver.1.4から更新した場合は、Drive権限を追加するため「Google Workspaceを再接続」を一度実行してください。</p>}
+          {status.connected && <p className="small muted" style={{ marginTop: 12 }}>Google Calendarはアプリを開いている間と、タブへ戻った時に自動同期します。常時バックグラウンド同期は行わないため、必要な場合はスケジュール画面の手動同期も利用できます。</p>}
         </div>
       </section>
 

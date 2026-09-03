@@ -44,7 +44,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <div className="card-body">
           {drive.folders.length ? (
             <>
-              <div className="drive-folder-chips">{drive.folders.map((folder) => <div className="drive-folder-chip" key={folder.id}><a href={folder.url} target="_blank" rel="noreferrer">📁 {folder.name} ↗</a><form action={syncProjectDriveFolderNow}><input type="hidden" name="project_id" value={id}/><input type="hidden" name="drive_folder_id" value={folder.id}/><button className="small-link-button" type="submit">↻ 同期</button></form></div>)}</div>
+              <div className="drive-folder-chips">{drive.folders.map((folder) => <div className={`drive-folder-chip ${folder.lastSyncError ? "has-error" : ""}`} key={folder.id}><div className="drive-folder-chip-main"><a href={folder.url} target="_blank" rel="noreferrer">📁 {folder.name} ↗</a><span className={`small ${folder.lastSyncError ? "drive-sync-error" : "muted"}`}>{folder.lastSyncError ? "同期エラー" : folder.lastSyncAt ? `同期 ${new Date(folder.lastSyncAt).toLocaleString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}` : "未同期"}</span></div><form action={syncProjectDriveFolderNow}><input type="hidden" name="project_id" value={id}/><input type="hidden" name="drive_folder_id" value={folder.id}/><button className="small-link-button" type="submit">↻ 同期</button></form></div>)}</div>
               <div className="drive-recent-head"><div className="small muted">最近更新されたファイル</div><Link className="small link-text" href={`/projects/${id}/drive`}>すべて表示 →</Link></div>
               <div className="list compact-list">{drive.files.length ? drive.files.map((file) => <a className="list-row drive-file-link" href={file.url} target="_blank" rel="noreferrer" key={file.id}><div className="grow"><div className="list-title">{file.name}</div><div className="small muted">{file.relativePath || file.name}{file.modifiedAt ? ` ・ ${new Date(file.modifiedAt).toLocaleDateString("ja-JP",{timeZone:"Asia/Tokyo"})}` : ""}</div></div><span className="badge">{file.fileType || "ファイル"}</span><span>↗</span></a>) : <div className="empty">ファイルはまだ同期されていません。</div>}</div>
             </>
@@ -55,6 +55,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <div className="detail-grid">
         <section className="card" id="schedule"><div className="card-head"><h2>予定</h2><Link className="button soft" href={`/projects/${id}/schedule/new`}>＋ 予定</Link></div><div className="card-body"><div className="action-box"><div className="label">次回予定</div><div className="value">{project.nextSchedule ?? "未設定"}</div></div></div></section>
         <section className="card" id="memo"><div className="card-head"><h2>メモ</h2><Link className="small muted" href={`/projects/${id}/edit`}>編集</Link></div><div className="card-body" style={{whiteSpace:"pre-wrap"}}>{project.memo ?? "メモはありません。"}</div></section>
+      </div>
+
+      <div className="project-mobile-quick mobile-only">
+        <Link className="button primary" href={`/projects/${id}/activities/new`}>＋ 活動</Link>
+        <Link className="button" href={`/projects/${id}/tasks/new`}>＋ タスク</Link>
+        <Link className="button" href={`/projects/${id}/schedule/new`}>＋ 予定</Link>
       </div>
     </>
   );
