@@ -7,7 +7,7 @@ import AutoDriveSync from "@/components/AutoDriveSync";
 import ProjectGmailPanel from "@/components/ProjectGmailPanel";
 import { priorityLabel } from "@/lib/mock-data";
 import { getProject, getProjectDriveSummary, getProjectGmailSummary } from "@/lib/data";
-import { archiveProject, deleteActivity, deleteProjectLink, deleteTask, syncProjectDriveFolderNow } from "@/lib/actions";
+import { archiveProject, deleteActivity, deleteProjectLink, deleteTask, markTaskFollowedUp, syncProjectDriveFolderNow } from "@/lib/actions";
 import TaskStatusToggle from "@/components/TaskStatusToggle";
 
 const VALID_TABS = new Set(["overview", "activities", "tasks", "schedule", "links", "drive", "memo"]);
@@ -71,10 +71,15 @@ export default async function ProjectDetailPage({
       <div className="card-head"><h2>タスク</h2><Link className="button soft" href={`/projects/${id}/tasks/new`}>＋ タスク</Link></div>
       <div className="list">
         {project.tasks.length ? project.tasks.map((t) => (
-          <div className="list-row" key={t.id}>
+          <div className={`list-row task-row ${t.followUpCandidate ? "followup-row" : ""}`} key={t.id}>
             <TaskStatusToggle id={t.id} status={t.status} projectId={id}/>
-            <div className="grow"><div className="list-title">{t.title}</div><div className="small muted">期限：{t.due}</div></div>
+            <div className="grow">
+              <div className="list-title">{t.title}</div>
+              <div className="small muted">期限：{t.due}</div>
+              {t.status === "waiting" && <div className="task-wait-meta"><span className={`badge ${t.followUpCandidate ? "red" : "orange"}`}>待ち {t.waitingDays ?? 0}日</span>{t.followUpAt ? <span className="small muted">フォロー予定：{new Date(t.followUpAt).toLocaleString("ja-JP", { timeZone:"Asia/Tokyo", month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" })}</span> : <span className="small muted">3日経過でフォロー候補</span>}</div>}
+            </div>
             <span className="badge">{t.priority === "high" ? "高" : t.priority === "medium" ? "中" : "低"}</span>
+            {t.followUpCandidate && <form action={markTaskFollowedUp}><input type="hidden" name="id" value={t.id}/><input type="hidden" name="project_id" value={id}/><input type="hidden" name="return_to" value={`/projects/${id}?tab=tasks`}/><button className="button followup-button">フォロー済み</button></form>}
             <Link className="icon-button edit" title="編集" href={`/tasks/${t.id}/edit?return_to=${encodeURIComponent(`/projects/${id}?tab=tasks`)}`}>✎</Link>
             <form action={deleteTask}><input type="hidden" name="id" value={t.id}/><input type="hidden" name="project_id" value={id}/><button className="icon-button" title="削除">×</button></form>
           </div>

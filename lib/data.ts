@@ -214,7 +214,7 @@ export async function getProject(id: string): Promise<Project | null> {
     supabase.from("projects").select(PROJECT_BASE_SELECT).eq("id", id).single(),
     supabase.from("project_links").select("id,name,url,link_type,is_pinned,pin_order").eq("project_id", id).order("sort_order"),
     supabase.from("activities").select("id,activity_at,activity_type,title,content").eq("project_id", id).order("activity_at", { ascending: false }).limit(50),
-    supabase.from("tasks").select("id,title,status,priority,due_at").eq("project_id", id).order("due_at", { ascending: true }),
+    supabase.from("tasks").select("id,title,status,priority,due_at,waiting_since,follow_up_at").eq("project_id", id).order("due_at", { ascending: true, nullsFirst: false }),
     supabase.from("schedules").select("start_at,title").eq("project_id", id).gte("start_at", now).order("start_at", { ascending: true }).limit(1)
   ]);
 
@@ -241,16 +241,22 @@ export async function getProject(id: string): Promise<Project | null> {
     content: a.content
   }));
 
-  project.tasks = ((tasksResult.data ?? []) as Array<{id:string;title:string;status:Task["status"];priority:Task["priority"];due_at:string|null}>).map((t): Task => ({
-    id: t.id,
-    title: t.title,
-    projectId: project.id,
-    projectName: project.name,
-    companyName: project.companyName,
-    status: t.status,
-    priority: t.priority,
-    due: t.due_at ? new Date(t.due_at).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" }) : "—"
-  }));
+  const taskNow = Date.now();
+  project.tasks = ((tasksResult.data ?? []) as Array<{id:string;title:string;status:Task["status"];priority:Task["priority"];due_at:string|null;waiting_since:string|null;follow_up_at:string|null}>).map((t): Task => {
+    const waitingSinceMs = t.waiting_since ? new Date(t.waiting_since).getTime() : null;
+    const waitingDays = waitingSinceMs ? Math.max(0, Math.floor((taskNow - waitingSinceMs) / (24 * 60 * 60 * 1000))) : undefined;
+    const followUpCandidate = t.status === "waiting" && (
+      (t.follow_up_at ? new Date(t.follow_up_at).getTime() <= taskNow : false) ||
+      (!t.follow_up_at && waitingSinceMs !== null && taskNow - waitingSinceMs >= 3 * 24 * 60 * 60 * 1000)
+    );
+    return {
+      id: t.id, title: t.title, projectId: project.id, projectName: project.name, companyName: project.companyName,
+      status: t.status, priority: t.priority,
+      due: t.due_at ? new Date(t.due_at).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo" }) : "—",
+      dueAt: t.due_at ?? undefined, waitingSince: t.waiting_since ?? undefined, followUpAt: t.follow_up_at ?? undefined,
+      waitingDays, followUpCandidate
+    };
+  });
 
   const nextSchedule = (schedulesResult.data ?? [])[0] as {start_at:string;title:string} | undefined;
   if (nextSchedule) {
@@ -269,7 +275,7 @@ export async function getTaskDetail(id: string): Promise<TaskDetail | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tasks")
-    .select("id,title,description,memo,project_id,company_id,status,priority,start_date,due_at")
+    .select("id,title,description,memo,project_id,company_id,status,priority,start_date,due_at,waiting_since,follow_up_at")
     .eq("id", id)
     .single();
   if (error) {
@@ -286,7 +292,9 @@ export async function getTaskDetail(id: string): Promise<TaskDetail | null> {
     status: data.status,
     priority: data.priority,
     startDate: data.start_date ?? undefined,
-    dueAt: toJstDateTimeLocal(data.due_at)
+    dueAt: toJstDateTimeLocal(data.due_at),
+    waitingSince: toJstDateTimeLocal(data.waiting_since),
+    followUpAt: toJstDateTimeLocal(data.follow_up_at)
   } as TaskDetail;
 }
 
@@ -361,21 +369,34 @@ export async function getTasks(): Promise<Task[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tasks")
-    .select("id,title,status,priority,due_at,project_id,projects(name,companies(name))")
-    .order("due_at", { ascending: true });
+    .select("id,title,status,priority,due_at,waiting_since,follow_up_at,project_id,projects(name,companies(name))")
+    .order("due_at", { ascending: true, nullsFirst: false });
   if (error) throw new Error(error.message);
 
   type RawTask = {
-    id:string; title:string; status:Task["status"]; priority:Task["priority"]; due_at:string|null; project_id:string|null;
+    id:string; title:string; status:Task["status"]; priority:Task["priority"]; due_at:string|null; waiting_since:string|null; follow_up_at:string|null; project_id:string|null;
     projects:{name:string;companies:{name:string}|null}|null
   };
-  return ((data ?? []) as unknown as RawTask[]).map((t) => ({
-    id:t.id, title:t.title, status:t.status, priority:t.priority,
-    due:t.due_at ? new Date(t.due_at).toLocaleDateString("ja-JP",{timeZone:"Asia/Tokyo"}) : "—",
-    projectId:t.project_id ?? undefined,
-    projectName:t.projects?.name,
-    companyName:t.projects?.companies?.name
-  }));
+  const now = Date.now();
+  const followupMs = 3 * 24 * 60 * 60 * 1000;
+  return ((data ?? []) as unknown as RawTask[]).map((t) => {
+    const waitingSinceMs = t.waiting_since ? new Date(t.waiting_since).getTime() : null;
+    const waitingDays = waitingSinceMs ? Math.max(0, Math.floor((now - waitingSinceMs) / (24 * 60 * 60 * 1000))) : undefined;
+    const followUpCandidate = t.status === "waiting" && (
+      (t.follow_up_at ? new Date(t.follow_up_at).getTime() <= now : false) ||
+      (!t.follow_up_at && waitingSinceMs !== null && now - waitingSinceMs >= followupMs)
+    );
+    return {
+      id:t.id, title:t.title, status:t.status, priority:t.priority,
+      due:t.due_at ? new Date(t.due_at).toLocaleDateString("ja-JP",{timeZone:"Asia/Tokyo"}) : "—",
+      dueAt:t.due_at ?? undefined,
+      waitingSince:t.waiting_since ?? undefined,
+      followUpAt:t.follow_up_at ?? undefined,
+      waitingDays, followUpCandidate,
+      projectId:t.project_id ?? undefined,
+      projectName:t.projects?.name, companyName:t.projects?.companies?.name
+    };
+  });
 }
 
 export async function getCompanies(): Promise<Company[]> {
@@ -597,9 +618,11 @@ export async function getDashboardSnapshot() {
       unfinishedTaskCount: demoTasks.filter((t) => t.status !== "completed").length,
       todayScheduleCount: demoSchedules.filter((s) => s.date === today).length,
       overdueTaskCount: 0,
+      waitingFollowupCount: demoTasks.filter((t) => t.status === "waiting").length,
       todaySchedules: demoSchedules.filter((s) => s.date === today).slice(0, 6),
       upcomingSchedules: demoSchedules.slice(0, 8),
       overdueTasks: [],
+      waitingFollowupTasks: demoTasks.filter((t) => t.status === "waiting").map((t) => ({ ...t, waitingDays: 4, dueAt: undefined })),
       staleProjects: [],
       noNextProjects: demoProjects.filter((p) => !["completed", "lost"].includes(p.status) && !p.nextAction).slice(0, 4),
       recentProjects: demoProjects.slice(0, 8),
@@ -625,7 +648,7 @@ export async function getDashboardSnapshot() {
       .limit(40),
     supabase
       .from("tasks")
-      .select("id,title,status,priority,due_at,project_id,projects(name,companies(name))")
+      .select("id,title,status,priority,due_at,waiting_since,follow_up_at,project_id,projects(name,companies(name))")
       .neq("status", "completed")
       .order("due_at", { ascending: true, nullsFirst: false })
       .limit(300),
@@ -676,9 +699,9 @@ export async function getDashboardSnapshot() {
     };
   });
 
-  type T = { id:string;title:string;status:Task["status"];priority:Task["priority"];due_at:string|null;project_id:string|null;projects:{name:string;companies:{name:string}|null}|null };
+  type T = { id:string;title:string;status:Task["status"];priority:Task["priority"];due_at:string|null;waiting_since:string|null;follow_up_at:string|null;project_id:string|null;projects:{name:string;companies:{name:string}|null}|null };
   const tasks = ((taskResult.data ?? []) as unknown as T[]).map((t) => ({
-    id:t.id, title:t.title, status:t.status, priority:t.priority, dueAt:t.due_at,
+    id:t.id, title:t.title, status:t.status, priority:t.priority, dueAt:t.due_at, waitingSince:t.waiting_since, followUpAt:t.follow_up_at,
     projectId:t.project_id ?? undefined, projectName:t.projects?.name, companyName:t.projects?.companies?.name
   }));
 
@@ -693,6 +716,12 @@ export async function getDashboardSnapshot() {
   const recentlyActive = new Set(((activityResult.data ?? []) as Array<{ project_id:string|null }>).map((a) => a.project_id).filter(Boolean));
   const overdueAll = tasks.filter((t) => t.dueAt && new Date(t.dueAt) < new Date(todayStart));
   const overdueTasks = overdueAll.slice(0, 6);
+  const waitingFollowupAll = tasks.filter((t) => {
+    if (t.status !== "waiting" || !t.waitingSince) return false;
+    if (t.followUpAt) return new Date(t.followUpAt).getTime() <= now;
+    return now - new Date(t.waitingSince).getTime() >= 3 * 24 * 60 * 60 * 1000;
+  }).map((t) => ({ ...t, waitingDays: Math.max(0, Math.floor((now - new Date(t.waitingSince!).getTime()) / (24 * 60 * 60 * 1000))) }));
+  const waitingFollowupTasks = waitingFollowupAll.slice(0, 6);
   const staleProjects = projects.filter((p) => new Date(p.createdAt) < new Date(staleCutoff) && !recentlyActive.has(p.id)).slice(0, 6);
   const noNextProjects = projects.filter((p) => !p.nextAction).slice(0, 5);
   const todayAll = schedules.filter((s) => new Date(s.startAt) < new Date(tomorrowStart));
@@ -709,9 +738,11 @@ export async function getDashboardSnapshot() {
     unfinishedTaskCount: tasks.length,
     todayScheduleCount: todayAll.length,
     overdueTaskCount: overdueAll.length,
+    waitingFollowupCount: waitingFollowupAll.length,
     todaySchedules: todayAll.slice(0, 6),
     upcomingSchedules: schedules.slice(0, 8),
     overdueTasks,
+    waitingFollowupTasks,
     staleProjects,
     noNextProjects,
     recentProjects: projects.slice(0, 8),

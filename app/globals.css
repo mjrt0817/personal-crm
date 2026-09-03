@@ -306,3 +306,21 @@ button.task-check.done { background:var(--success); }
 @media (max-width:720px) {
   .gmail-row-actions .task-from-mail { flex-basis:100%; }
 }
+
+
+/* Ver.2.0: 待ちタスク・フォローアップ */
+.filter-chips { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
+.filter-chip { display:inline-flex; align-items:center; min-height:34px; padding:7px 12px; border:1px solid var(--line); border-radius:999px; background:white; color:var(--muted); font-size:13px; font-weight:700; }
+.filter-chip:hover { border-color:#b8c7ea; color:var(--accent); }
+.filter-chip.active { background:var(--accent-soft); border-color:#b8c7ea; color:var(--accent); }
+.task-wait-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:7px; }
+.followup-row { background:#fffaf5; }
+.followup-row:hover { background:#fff6ed; }
+.followup-button { white-space:nowrap; border-color:#f0c99d; color:#9a5a13; background:#fff; }
+.followup-button:hover { background:#fff2df; }
+@media (max-width:760px) {
+  .task-row { align-items:flex-start; flex-wrap:wrap; }
+  .task-row .grow { flex-basis:calc(100% - 36px); }
+  .task-row > .badge, .task-row > .small { margin-left:30px; }
+  .followup-button { margin-left:30px; }
+}

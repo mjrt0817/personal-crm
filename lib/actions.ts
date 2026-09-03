@@ -320,16 +320,19 @@ export async function createTask(formData: FormData) {
   if (demoMode) demoReturn(formData, projectId ? `/projects/${projectId}` : "/tasks");
   const { supabase, userId } = await authed();
   const companyId = await resolveCompanyIdForProject(supabase, projectId, optional(formData, "company_id"));
+  const status = text(formData, "status") || "todo";
   const { error } = await supabase.from("tasks").insert({
     user_id: userId,
     company_id: companyId,
     project_id: projectId,
     title: required(formData, "title", "タスク名"),
     description: optional(formData, "description"),
-    status: text(formData, "status") || "todo",
+    status,
     priority: text(formData, "priority") || "medium",
     start_date: optional(formData, "start_date"),
     due_at: jstDateTimeOrNull(formData, "due_at"),
+    waiting_since: status === "waiting" ? (jstDateTimeOrNull(formData, "waiting_since") || new Date().toISOString()) : null,
+    follow_up_at: status === "waiting" ? jstDateTimeOrNull(formData, "follow_up_at") : null,
     memo: optional(formData, "memo")
   });
   if (error) throw new Error(error.message);
@@ -345,6 +348,10 @@ export async function updateTask(formData: FormData) {
   const { supabase } = await authed();
   const companyId = await resolveCompanyIdForProject(supabase, projectId, optional(formData, "company_id"));
   const status = text(formData, "status") || "todo";
+  const { data: existing, error: existingError } = await supabase.from("tasks").select("status,waiting_since").eq("id", id).single();
+  if (existingError) throw new Error(existingError.message);
+  const waitingSinceInput = jstDateTimeOrNull(formData, "waiting_since");
+  const waitingSince = status === "waiting" ? (waitingSinceInput || (existing.status === "waiting" ? existing.waiting_since : null) || new Date().toISOString()) : null;
   const { error } = await supabase.from("tasks").update({
     company_id: companyId,
     project_id: projectId,
@@ -355,6 +362,8 @@ export async function updateTask(formData: FormData) {
     start_date: optional(formData, "start_date"),
     due_at: jstDateTimeOrNull(formData, "due_at"),
     completed_at: status === "completed" ? new Date().toISOString() : null,
+    waiting_since: waitingSince,
+    follow_up_at: status === "waiting" ? jstDateTimeOrNull(formData, "follow_up_at") : null,
     memo: optional(formData, "memo")
   }).eq("id", id);
   if (error) throw new Error(error.message);
@@ -369,9 +378,13 @@ export async function setTaskStatus(formData: FormData) {
   const projectId = optional(formData, "project_id");
   if (demoMode) demoReturn(formData, projectId ? `/projects/${projectId}` : "/tasks");
   const { supabase } = await authed();
+  const { data: existing, error: existingError } = await supabase.from("tasks").select("status,waiting_since").eq("id", id).single();
+  if (existingError) throw new Error(existingError.message);
   const { error } = await supabase.from("tasks").update({
     status,
-    completed_at: status === "completed" ? new Date().toISOString() : null
+    completed_at: status === "completed" ? new Date().toISOString() : null,
+    waiting_since: status === "waiting" ? (existing.waiting_since || new Date().toISOString()) : null,
+    follow_up_at: status === "waiting" ? undefined : null
   }).eq("id", id);
   if (error) throw new Error(error.message);
   invalidateTaskMutation(projectId);
@@ -383,11 +396,29 @@ export async function setTaskStatusQuick(id: string, status: "todo" | "completed
   const { supabase } = await authed();
   const { error } = await supabase.from("tasks").update({
     status,
-    completed_at: status === "completed" ? new Date().toISOString() : null
+    completed_at: status === "completed" ? new Date().toISOString() : null,
+    waiting_since: null,
+    follow_up_at: null
   }).eq("id", id);
   if (error) throw new Error(error.message);
   invalidateTaskMutation(projectId);
   return { ok: true };
+}
+
+
+export async function markTaskFollowedUp(formData: FormData) {
+  const id = required(formData, "id", "タスクID");
+  const projectId = optional(formData, "project_id");
+  if (demoMode) demoReturn(formData, returnTarget(formData, projectId ? `/projects/${projectId}?tab=tasks` : "/tasks?filter=waiting"));
+  const { supabase } = await authed();
+  const { error } = await supabase.from("tasks").update({
+    status: "waiting",
+    waiting_since: new Date().toISOString(),
+    follow_up_at: null
+  }).eq("id", id);
+  if (error) throw new Error(error.message);
+  invalidateTaskMutation(projectId);
+  redirect(returnTarget(formData, projectId ? `/projects/${projectId}?tab=tasks` : "/tasks?filter=waiting"));
 }
 
 export async function deleteTask(formData: FormData) {
@@ -777,6 +808,8 @@ export async function createTaskFromGmail(formData: FormData) {
     priority: text(formData, "priority") || "medium",
     start_date: optional(formData, "start_date"),
     due_at: jstDateTimeOrNull(formData, "due_at"),
+    waiting_since: status === "waiting" ? (mail.sent_at || new Date().toISOString()) : null,
+    follow_up_at: status === "waiting" ? jstDateTimeOrNull(formData, "follow_up_at") : null,
     memo: optional(formData, "memo"),
     source: "gmail",
     source_external_id: mail.gmail_message_id

@@ -109,6 +109,8 @@ create table if not exists public.tasks (
   start_date date,
   due_at timestamptz,
   completed_at timestamptz,
+  waiting_since timestamptz,
+  follow_up_at timestamptz,
   memo text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

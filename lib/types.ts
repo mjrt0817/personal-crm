@@ -40,6 +40,11 @@ export type Task = {
   status: TaskStatus;
   priority: Priority;
   due: string;
+  dueAt?: string;
+  waitingSince?: string;
+  followUpAt?: string;
+  waitingDays?: number;
+  followUpCandidate?: boolean;
 };
 
 export type TaskDetail = {
@@ -53,6 +58,8 @@ export type TaskDetail = {
   priority: Priority;
   startDate?: string;
   dueAt?: string;
+  waitingSince?: string;
+  followUpAt?: string;
 };
 
 export type ProjectLinkDetail = ProjectLink & {

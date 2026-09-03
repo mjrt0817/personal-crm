@@ -1,6 +1,7 @@
 import Link from "next/link";
 import MetricCard from "@/components/MetricCard";
 import StatusBadge from "@/components/StatusBadge";
+import { markTaskFollowedUp } from "@/lib/actions";
 import { getDashboardSnapshot, getGoogleCalendarConnectionStatus } from "@/lib/data";
 
 function formatDateTime(value?: string) {
@@ -38,7 +39,7 @@ export default async function DashboardPage() {
         <MetricCard label="今日の予定" value={snapshot.todayScheduleCount} note="Google連携含む"/>
         <MetricCard label="未完了タスク" value={snapshot.unfinishedTaskCount} note="全案件"/>
         <MetricCard label="期限超過" value={snapshot.overdueTaskCount} note="要対応"/>
-        <MetricCard label="対応中案件" value={snapshot.activeProjectCount} note="完了・失注以外"/>
+        <MetricCard label="回答待ちフォロー" value={snapshot.waitingFollowupCount} note="3日以上・指定日到来"/>
       </div>
 
       <div className="two-col">
@@ -59,6 +60,14 @@ export default async function DashboardPage() {
         <section className="card">
           <div className="card-head"><h2>要確認</h2><Link href="/tasks" className="small muted">タスク一覧</Link></div>
           <div className="list">
+            {snapshot.waitingFollowupTasks.map((t) => (
+              <div className="list-row followup-row" key={`wait-${t.id}`}>
+                <span className="badge red">回答待ち {t.waitingDays}日</span>
+                <div className="grow"><div className="list-title">{t.title}</div><div className="small muted">{t.companyName ?? "単独タスク"}{t.followUpAt ? ` ・ フォロー予定 ${dueLabel(t.followUpAt)}` : " ・ フォロー候補"}</div></div>
+                <form action={markTaskFollowedUp}><input type="hidden" name="id" value={t.id}/>{t.projectId && <input type="hidden" name="project_id" value={t.projectId}/>}<input type="hidden" name="return_to" value="/dashboard"/><button className="button followup-button">フォロー済み</button></form>
+                {t.projectId && <Link className="icon-button edit" title="案件へ" href={`/projects/${t.projectId}`}>→</Link>}
+              </div>
+            ))}
             {snapshot.overdueTasks.map((t) => (
               <div className="list-row" key={`over-${t.id}`}>
                 <span className="badge red">期限超過</span>
@@ -78,7 +87,7 @@ export default async function DashboardPage() {
                 <div className="grow"><div className="list-title">{p.name}</div><div className="small muted">{p.companyName}</div></div>
               </Link>
             ))}
-            {!snapshot.overdueTasks.length && !snapshot.staleProjects.length && !snapshot.noNextProjects.length && <div className="empty">要確認項目はありません。</div>}
+            {!snapshot.waitingFollowupTasks.length && !snapshot.overdueTasks.length && !snapshot.staleProjects.length && !snapshot.noNextProjects.length && <div className="empty">要確認項目はありません。</div>}
           </div>
         </section>
       </div>

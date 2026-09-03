@@ -83,7 +83,7 @@ export const projects: Project[] = [
     links: [],
     activities: [],
     tasks: [
-      { id: "t5", title: "現行Excel受領確認", projectId: "it-consult", projectName: "業務管理ツール相談", companyName: "△△事務所", status: "waiting", priority: "low", due: "2026-09-12" }
+      { id: "t5", title: "現行Excel受領確認", projectId: "it-consult", projectName: "業務管理ツール相談", companyName: "△△事務所", status: "waiting", priority: "low", due: "2026-09-12", waitingSince: "2026-08-30T01:00:00Z", waitingDays: 4, followUpCandidate: true }
     ]
   }
 ];
