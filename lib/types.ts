@@ -12,6 +12,7 @@ export type ProjectStatus =
 
 export type Priority = "high" | "medium" | "low";
 export type TaskStatus = "todo" | "doing" | "waiting" | "completed";
+export type PricingModel = "fixed" | "unit";
 
 export type ProjectLink = {
   id: string;
@@ -159,6 +160,11 @@ export type Project = {
   completedDate?: string;
   expectedAmount?: number;
   orderAmount?: number;
+  pricingModel?: PricingModel;
+  unitLabel?: string;
+  unitPrice?: number;
+  plannedUnits?: number;
+  completedUnits?: number;
   winProbability?: number;
   expectedCloseDate?: string;
   nextAction?: string;
@@ -258,8 +264,10 @@ export type SalesPipelineSnapshot = {
   openExpectedAmount: number;
   weightedExpectedAmount: number;
   wonAmount: number;
+  realizedAmount: number;
   currentMonthWonAmount: number;
   stages: PipelineStageSummary[];
   months: PipelineMonthSummary[];
-  opportunities: Array<Project & { effectiveProbability: number; weightedAmount: number }>;
+  opportunities: Array<Project & { effectiveProbability: number; weightedAmount: number; calculatedExpectedAmount: number }>;
+  wonProjects: Array<Project & { calculatedWonAmount: number; realizedAmount: number; remainingAmount: number }>;
 };

@@ -6,8 +6,8 @@ import ProjectDetailTabs from "@/components/ProjectDetailTabs";
 import AutoDriveSync from "@/components/AutoDriveSync";
 import ProjectGmailPanel from "@/components/ProjectGmailPanel";
 import { priorityLabel } from "@/lib/mock-data";
-import { getProject, getProjectDriveSummary, getProjectGmailSummary } from "@/lib/data";
-import { archiveProject, deleteActivity, deleteProjectLink, deleteTask, markTaskFollowedUp, syncProjectDriveFolderNow } from "@/lib/actions";
+import { getProject, getProjectDriveSummary, getProjectGmailSummary, getProjectExpectedRevenue, getProjectRealizedRevenue } from "@/lib/data";
+import { adjustProjectCompletedUnits, archiveProject, deleteActivity, deleteProjectLink, deleteTask, markTaskFollowedUp, syncProjectDriveFolderNow } from "@/lib/actions";
 import TaskStatusToggle from "@/components/TaskStatusToggle";
 import ProjectAiSummary from "@/components/ProjectAiSummary";
 import { getAiConfigStatus } from "@/lib/openai-server";
@@ -28,6 +28,10 @@ export default async function ProjectDetailPage({
   const ai = getAiConfigStatus();
   if (!project) notFound();
 
+  const expectedRevenue = getProjectExpectedRevenue(project);
+  const realizedRevenue = getProjectRealizedRevenue(project);
+  const remainingRevenue = Math.max(0, expectedRevenue - realizedRevenue);
+
   const overview = (
     <section className="card">
       <div className="card-head"><h2>概要</h2><Link className="small muted" href={`/projects/${id}/edit`}>編集</Link></div>
@@ -36,8 +40,30 @@ export default async function ProjectDetailPage({
         <div className="kv"><div className="k">主担当</div><div>{project.contactName ?? "—"}</div></div>
         <div className="kv"><div className="k">開始日</div><div>{project.startDate ?? "—"}</div></div>
         <div className="kv"><div className="k">納期</div><div>{project.dueDate ?? "—"}</div></div>
-        <div className="kv"><div className="k">見込金額</div><div>{project.expectedAmount != null ? `${project.expectedAmount.toLocaleString()}円` : "—"}</div></div>
-        <div className="kv"><div className="k">受注金額</div><div>{project.orderAmount != null ? `${project.orderAmount.toLocaleString()}円` : "—"}</div></div>
+        {project.pricingModel === "unit" ? (
+          <>
+            <div className="kv"><div className="k">金額方式</div><div>単価 × {project.unitLabel ?? "回"}</div></div>
+            <div className="kv"><div className="k">単価</div><div>{(project.unitPrice ?? 0).toLocaleString()}円 / {project.unitLabel ?? "回"}</div></div>
+            <div className="kv"><div className="k">予定売上</div><div><strong>{expectedRevenue.toLocaleString()}円</strong></div></div>
+            <div className="kv"><div className="k">実施済み売上</div><div><strong>{realizedRevenue.toLocaleString()}円</strong></div></div>
+            <div className="kv"><div className="k">残り見込</div><div>{remainingRevenue.toLocaleString()}円</div></div>
+            <div className="unit-progress-card">
+              <div>
+                <div className="small muted">実施回数</div>
+                <div className="unit-progress-value"><strong>{project.completedUnits ?? 0}</strong> / {project.plannedUnits ?? 0} {project.unitLabel ?? "回"}</div>
+              </div>
+              <div className="unit-stepper">
+                <form action={adjustProjectCompletedUnits}><input type="hidden" name="id" value={id}/><input type="hidden" name="delta" value="-1"/><button className="button" disabled={(project.completedUnits ?? 0) <= 0}>−1</button></form>
+                <form action={adjustProjectCompletedUnits}><input type="hidden" name="id" value={id}/><input type="hidden" name="delta" value="1"/><button className="button primary">＋1 実施</button></form>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="kv"><div className="k">見込金額</div><div>{project.expectedAmount != null ? `${project.expectedAmount.toLocaleString()}円` : "—"}</div></div>
+            <div className="kv"><div className="k">受注金額</div><div>{project.orderAmount != null ? `${project.orderAmount.toLocaleString()}円` : "—"}</div></div>
+          </>
+        )}
         <div className="kv"><div className="k">受注確度</div><div>{project.winProbability != null ? `${project.winProbability}%` : "ステータス標準値"}</div></div>
         <div className="kv"><div className="k">受注見込日</div><div>{project.expectedCloseDate ?? "—"}</div></div>
         <div style={{ marginTop: 16 }}><div className="small muted">案件概要</div><p style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{project.description || "—"}</p></div>

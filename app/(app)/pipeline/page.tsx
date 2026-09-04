@@ -16,7 +16,7 @@ export default async function PipelinePage() {
       <div className="page-head">
         <div>
           <h1>売上・見込</h1>
-          <p className="muted">案件の見込金額、受注確度、受注見込日からパイプラインを把握します。</p>
+          <p className="muted">商談見込と、受注・進行中案件の予定売上／実施済み売上をまとめて把握します。</p>
         </div>
         <Link href="/projects/new" className="button primary">＋ 案件登録</Link>
       </div>
@@ -25,7 +25,7 @@ export default async function PipelinePage() {
         <MetricCard label="商談中案件" value={pipeline.openCount} note="保留を含む"/>
         <MetricCard label="見込総額" value={yen(pipeline.openExpectedAmount)} note="未受注案件"/>
         <MetricCard label="加重見込" value={yen(pipeline.weightedExpectedAmount)} note="見込額 × 受注確度"/>
-        <MetricCard label="今月受注" value={yen(pipeline.currentMonthWonAmount)} note={`受注累計 ${yen(pipeline.wonAmount)}`}/>
+        <MetricCard label="受注・進行中見込" value={yen(pipeline.wonAmount)} note={`実施済み ${yen(pipeline.realizedAmount)}`}/>
       </div>
 
       <div className="two-col">
@@ -73,7 +73,7 @@ export default async function PipelinePage() {
                   <td><Link href={`/projects/${p.id}`}><strong>{p.name}</strong></Link><div className="small muted">{p.companyName}</div></td>
                   <td><StatusBadge status={p.status}/></td>
                   <td>{priorityLabel[p.priority]}</td>
-                  <td className="money-value">{yen(p.expectedAmount ?? 0)}</td>
+                  <td className="money-value">{yen(p.calculatedExpectedAmount)}</td>
                   <td><span className="badge blue pipeline-probability">{p.effectiveProbability}%</span>{p.winProbability == null && <div className="small muted">標準値</div>}</td>
                   <td className="money-value"><strong>{yen(p.weightedAmount)}</strong></td>
                   <td>{p.expectedCloseDate ?? "未設定"}</td>
@@ -82,6 +82,28 @@ export default async function PipelinePage() {
             </tbody>
           </table>
           {!pipeline.opportunities.length && <div className="empty">商談中の案件はありません。</div>}
+        </div>
+      </section>
+
+      <section className="card" style={{marginTop:18}}>
+        <div className="card-head"><h2>受注・進行中案件</h2><span className="badge">{pipeline.wonProjects.length}件</span></div>
+        <div className="table-wrap">
+          <table className="pipeline-opportunity-table">
+            <thead><tr><th>案件</th><th>状態</th><th>金額方式</th><th>予定・受注額</th><th>実施済み</th><th>残り</th></tr></thead>
+            <tbody>
+              {pipeline.wonProjects.map((p) => (
+                <tr key={p.id}>
+                  <td><Link href={`/projects/${p.id}`}><strong>{p.name}</strong></Link><div className="small muted">{p.companyName}</div></td>
+                  <td><StatusBadge status={p.status}/></td>
+                  <td>{p.pricingModel === "unit" ? <><strong>{(p.unitPrice ?? 0).toLocaleString()}円</strong> × {p.plannedUnits ?? 0}{p.unitLabel ?? "回"}<div className="small muted">実施 {p.completedUnits ?? 0}{p.unitLabel ?? "回"}</div></> : "固定金額"}</td>
+                  <td className="money-value"><strong>{yen(p.calculatedWonAmount)}</strong></td>
+                  <td className="money-value">{yen(p.realizedAmount)}</td>
+                  <td className="money-value">{yen(p.remainingAmount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!pipeline.wonProjects.length && <div className="empty">受注・進行中の案件はありません。</div>}
         </div>
       </section>
     </>

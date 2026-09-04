@@ -36,6 +36,31 @@ function numberOrNull(formData: FormData, name: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+
+function pricingFields(formData: FormData) {
+  const pricingModel = text(formData, "pricing_model") === "unit" ? "unit" : "fixed";
+  if (pricingModel === "unit") {
+    return {
+      pricing_model: "unit",
+      unit_label: optional(formData, "unit_label") || "回",
+      unit_price: numberOrNull(formData, "unit_price"),
+      planned_units: numberOrNull(formData, "planned_units"),
+      completed_units: numberOrNull(formData, "completed_units"),
+      expected_amount: null,
+      order_amount: null
+    };
+  }
+  return {
+    pricing_model: "fixed",
+    unit_label: "回",
+    unit_price: null,
+    planned_units: null,
+    completed_units: null,
+    expected_amount: numberOrNull(formData, "expected_amount"),
+    order_amount: numberOrNull(formData, "order_amount")
+  };
+}
+
 function jstDateTimeOrNull(formData: FormData, name: string) {
   const value = text(formData, name);
   if (!value) return null;
@@ -173,8 +198,7 @@ export async function createProject(formData: FormData) {
     start_date: optional(formData, "start_date"),
     due_date: optional(formData, "due_date"),
     completed_date: optional(formData, "completed_date"),
-    expected_amount: numberOrNull(formData, "expected_amount"),
-    order_amount: numberOrNull(formData, "order_amount"),
+    ...pricingFields(formData),
     win_probability: numberOrNull(formData, "win_probability"),
     expected_close_date: optional(formData, "expected_close_date"),
     next_action: optional(formData, "next_action"),
@@ -205,8 +229,7 @@ export async function updateProject(formData: FormData) {
     start_date: optional(formData, "start_date"),
     due_date: optional(formData, "due_date"),
     completed_date: optional(formData, "completed_date") || (status === "completed" ? new Date().toISOString().slice(0, 10) : null),
-    expected_amount: numberOrNull(formData, "expected_amount"),
-    order_amount: numberOrNull(formData, "order_amount"),
+    ...pricingFields(formData),
     win_probability: numberOrNull(formData, "win_probability"),
     expected_close_date: optional(formData, "expected_close_date"),
     next_action: optional(formData, "next_action"),
@@ -214,6 +237,33 @@ export async function updateProject(formData: FormData) {
     memo: optional(formData, "memo")
   }).eq("id", id);
   if (error) throw new Error(error.message);
+  invalidateProjectMutation(id);
+  redirect(`/projects/${id}`);
+}
+
+export async function adjustProjectCompletedUnits(formData: FormData) {
+  const id = required(formData, "id", "案件ID");
+  const deltaRaw = Number(text(formData, "delta"));
+  const delta = deltaRaw >= 0 ? 1 : -1;
+  if (demoMode) demoReturn(formData, `/projects/${id}`);
+  const { supabase } = await authed();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("pricing_model,completed_units,planned_units")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(error.message);
+  if (data.pricing_model !== "unit") throw new Error("単価×回数の案件ではありません。");
+
+  const current = Number(data.completed_units ?? 0);
+  const planned = Number(data.planned_units ?? 0);
+  const completed = Math.max(0, current + delta);
+  const nextPlanned = delta > 0 && completed > planned ? completed : planned;
+  const { error: updateError } = await supabase
+    .from("projects")
+    .update({ completed_units: completed, planned_units: nextPlanned })
+    .eq("id", id);
+  if (updateError) throw new Error(updateError.message);
   invalidateProjectMutation(id);
   redirect(`/projects/${id}`);
 }

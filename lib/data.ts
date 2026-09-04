@@ -6,7 +6,7 @@ import { getActionPreferences } from "@/lib/preferences";
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 const PROJECT_BASE_SELECT = `
-  id,name,company_id,primary_contact_id,category_id,status,priority,inquiry_date,proposal_date,order_date,start_date,due_date,completed_date,expected_amount,order_amount,win_probability,expected_close_date,next_action,next_action_due,description,memo,
+  id,name,company_id,primary_contact_id,category_id,status,priority,inquiry_date,proposal_date,order_date,start_date,due_date,completed_date,expected_amount,order_amount,pricing_model,unit_label,unit_price,planned_units,completed_units,win_probability,expected_close_date,next_action,next_action_due,description,memo,
   companies(name),
   contacts:primary_contact_id(name),
   project_categories(name)
@@ -25,9 +25,14 @@ type RawProject = {
   proposal_date: string | null;
   order_date: string | null;
   completed_date: string | null;
-  expected_amount: number | null;
-  order_amount: number | null;
-  win_probability: number | null;
+  expected_amount: number | string | null;
+  order_amount: number | string | null;
+  pricing_model: "fixed" | "unit" | null;
+  unit_label: string | null;
+  unit_price: number | string | null;
+  planned_units: number | string | null;
+  completed_units: number | string | null;
+  win_probability: number | string | null;
   expected_close_date: string | null;
   memo: string | null;
   description: string | null;
@@ -38,6 +43,27 @@ type RawProject = {
   contacts: { name: string } | null;
   project_categories: { name: string } | null;
 };
+
+function numericOrUndefined(value: number | string | null | undefined) {
+  if (value == null || value === "") return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+export function getProjectExpectedRevenue(project: Project) {
+  if (project.pricingModel === "unit") return Math.round((project.unitPrice ?? 0) * (project.plannedUnits ?? 0));
+  return project.expectedAmount ?? project.orderAmount ?? 0;
+}
+
+export function getProjectWonRevenue(project: Project) {
+  if (project.pricingModel === "unit") return getProjectExpectedRevenue(project);
+  return project.orderAmount ?? project.expectedAmount ?? 0;
+}
+
+export function getProjectRealizedRevenue(project: Project) {
+  if (project.pricingModel === "unit") return Math.round((project.unitPrice ?? 0) * (project.completedUnits ?? 0));
+  return project.status === "completed" ? (project.orderAmount ?? project.expectedAmount ?? 0) : 0;
+}
 
 function mapProject(row: RawProject): Project {
   return {
@@ -57,9 +83,14 @@ function mapProject(row: RawProject): Project {
     startDate: row.start_date ?? undefined,
     dueDate: row.due_date ?? undefined,
     completedDate: row.completed_date ?? undefined,
-    expectedAmount: row.expected_amount ?? undefined,
-    orderAmount: row.order_amount ?? undefined,
-    winProbability: row.win_probability ?? undefined,
+    expectedAmount: numericOrUndefined(row.expected_amount),
+    orderAmount: numericOrUndefined(row.order_amount),
+    pricingModel: row.pricing_model ?? "fixed",
+    unitLabel: row.unit_label ?? "回",
+    unitPrice: numericOrUndefined(row.unit_price),
+    plannedUnits: numericOrUndefined(row.planned_units),
+    completedUnits: numericOrUndefined(row.completed_units),
+    winProbability: numericOrUndefined(row.win_probability),
     expectedCloseDate: row.expected_close_date ?? undefined,
     nextAction: row.next_action ?? undefined,
     nextActionDue: row.next_action_due
@@ -911,10 +942,19 @@ export async function getSalesPipelineSnapshot(): Promise<SalesPipelineSnapshot>
   const opportunities = open
     .map((p) => {
       const effectiveProbability = getEffectiveWinProbability(p);
-      const weightedAmount = Math.round((p.expectedAmount ?? 0) * effectiveProbability / 100);
-      return { ...p, effectiveProbability, weightedAmount };
+      const calculatedExpectedAmount = getProjectExpectedRevenue(p);
+      const weightedAmount = Math.round(calculatedExpectedAmount * effectiveProbability / 100);
+      return { ...p, effectiveProbability, calculatedExpectedAmount, weightedAmount };
     })
     .sort((a,b) => b.weightedAmount - a.weightedAmount || (a.expectedCloseDate ?? "9999-12-31").localeCompare(b.expectedCloseDate ?? "9999-12-31"));
+
+  const wonProjects = won
+    .map((p) => {
+      const calculatedWonAmount = getProjectWonRevenue(p);
+      const realizedAmount = getProjectRealizedRevenue(p);
+      return { ...p, calculatedWonAmount, realizedAmount, remainingAmount: Math.max(0, calculatedWonAmount - realizedAmount) };
+    })
+    .sort((a,b) => b.remainingAmount - a.remainingAmount || b.calculatedWonAmount - a.calculatedWonAmount);
 
   const stageOrder: Project["status"][] = ["consultation","hearing","preparing","proposed","considering","on_hold"];
   const stages = stageOrder.map((status) => {
@@ -922,7 +962,7 @@ export async function getSalesPipelineSnapshot(): Promise<SalesPipelineSnapshot>
     return {
       status,
       count: rows.length,
-      expectedAmount: rows.reduce((sum,p) => sum + (p.expectedAmount ?? 0), 0),
+      expectedAmount: rows.reduce((sum,p) => sum + p.calculatedExpectedAmount, 0),
       weightedAmount: rows.reduce((sum,p) => sum + p.weightedAmount, 0)
     };
   });
@@ -938,24 +978,26 @@ export async function getSalesPipelineSnapshot(): Promise<SalesPipelineSnapshot>
 
   const months = monthKeys.map((key) => {
     const openRows = opportunities.filter((p) => p.expectedCloseDate?.slice(0,7) === key);
-    const wonRows = won.filter((p) => p.orderDate?.slice(0,7) === key);
+    const wonRows = wonProjects.filter((p) => (p.orderDate ?? p.startDate)?.slice(0,7) === key);
     return {
       key,
       label: monthLabelFromKey(key),
-      expectedAmount: openRows.reduce((sum,p) => sum + (p.expectedAmount ?? 0), 0),
+      expectedAmount: openRows.reduce((sum,p) => sum + p.calculatedExpectedAmount, 0),
       weightedAmount: openRows.reduce((sum,p) => sum + p.weightedAmount, 0),
-      orderedAmount: wonRows.reduce((sum,p) => sum + (p.orderAmount ?? 0), 0)
+      orderedAmount: wonRows.reduce((sum,p) => sum + p.calculatedWonAmount, 0)
     };
   });
 
   return {
     openCount: open.length,
-    openExpectedAmount: open.reduce((sum,p) => sum + (p.expectedAmount ?? 0), 0),
+    openExpectedAmount: opportunities.reduce((sum,p) => sum + p.calculatedExpectedAmount, 0),
     weightedExpectedAmount: opportunities.reduce((sum,p) => sum + p.weightedAmount, 0),
-    wonAmount: won.reduce((sum,p) => sum + (p.orderAmount ?? 0), 0),
-    currentMonthWonAmount: won.filter((p) => p.orderDate?.slice(0,7) === currentKey).reduce((sum,p) => sum + (p.orderAmount ?? 0), 0),
+    wonAmount: wonProjects.reduce((sum,p) => sum + p.calculatedWonAmount, 0),
+    realizedAmount: wonProjects.reduce((sum,p) => sum + p.realizedAmount, 0),
+    currentMonthWonAmount: wonProjects.filter((p) => (p.orderDate ?? p.startDate)?.slice(0,7) === currentKey).reduce((sum,p) => sum + p.calculatedWonAmount, 0),
     stages,
     months,
-    opportunities
+    opportunities,
+    wonProjects
   };
 }

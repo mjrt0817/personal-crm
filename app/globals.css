@@ -153,6 +153,7 @@ tr:last-child td { border-bottom: 0; }
 .form-grid { display:grid; gap:14px; }
 .form-grid.two { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .form-grid.three { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.form-grid.four { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .field { display:grid; gap:7px; margin-bottom:14px; }
 .field > span { font-size:13px; font-weight:700; color:var(--muted); }
 .field input,.field select,.field textarea,.mini-form input { width:100%; border:1px solid #cfd6e1; border-radius:10px; padding:10px 11px; background:white; color:var(--text); }
@@ -171,7 +172,7 @@ button.task-check { padding:0; background:white; }
 button.task-check.done { background:var(--success); }
 
 @media (max-width: 760px) {
-  .form-grid.two,.form-grid.three { grid-template-columns:1fr; }
+  .form-grid.two,.form-grid.three,.form-grid.four { grid-template-columns:1fr; }
   .mini-form { grid-template-columns:1fr; }
   .form-section { padding:16px; }
   .form-actions { position:sticky; bottom:64px; z-index:5; }
@@ -403,4 +404,25 @@ button.task-check.done { background:var(--success); }
   .pipeline-stage-grid { grid-template-columns:1fr; }
   .pipeline-dashboard-body { grid-template-columns:1fr 1fr; }
   .card > .list.compact-list .list-row { padding-left:14px; padding-right:14px; }
+}
+
+
+/* Ver.2.5: 単価×回数・数量の売上管理 */
+.pricing-fields { display:grid; gap:14px; }
+.pricing-preview { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.pricing-preview > div { border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--surface-2); display:flex; flex-direction:column; gap:5px; }
+.pricing-preview span { color:var(--muted); font-size:12px; }
+.pricing-preview strong { font-size:18px; font-variant-numeric:tabular-nums; }
+.unit-progress-card { margin-top:14px; border:1px solid var(--line); background:var(--surface-2); border-radius:12px; padding:14px; display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.unit-progress-value { margin-top:4px; font-size:18px; }
+.unit-progress-value strong { font-size:24px; }
+.unit-stepper { display:flex; gap:8px; align-items:center; }
+@media(max-width:900px){ .pricing-unit-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; } }
+@media(max-width:620px){
+  .pricing-unit-grid { grid-template-columns:1fr !important; }
+  .pricing-preview { grid-template-columns:1fr; }
+  .unit-progress-card { align-items:stretch; flex-direction:column; }
+  .unit-stepper { width:100%; }
+  .unit-stepper form { flex:1; }
+  .unit-stepper .button { width:100%; }
 }

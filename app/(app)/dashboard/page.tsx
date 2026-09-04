@@ -49,7 +49,7 @@ export default async function DashboardPage() {
           <div className="pipeline-mini"><div className="label">商談中</div><div className="value">{pipeline.openCount}件</div></div>
           <div className="pipeline-mini"><div className="label">見込総額</div><div className="value">{pipeline.openExpectedAmount.toLocaleString("ja-JP")}円</div></div>
           <div className="pipeline-mini"><div className="label">加重見込</div><div className="value">{pipeline.weightedExpectedAmount.toLocaleString("ja-JP")}円</div></div>
-          <div className="pipeline-mini"><div className="label">今月受注</div><div className="value">{pipeline.currentMonthWonAmount.toLocaleString("ja-JP")}円</div></div>
+          <div className="pipeline-mini"><div className="label">受注・進行中</div><div className="value">{pipeline.wonAmount.toLocaleString("ja-JP")}円</div><div className="small muted">実施済 {pipeline.realizedAmount.toLocaleString("ja-JP")}円</div></div>
         </div>
       </section>
 

@@ -1,4 +1,5 @@
 import SubmitButton from "@/components/SubmitButton";
+import ProjectPricingFields from "@/components/ProjectPricingFields";
 import type { FormOptions, Project } from "@/lib/types";
 
 const statuses = [
@@ -45,9 +46,8 @@ export default function ProjectForm({ project, options, action }: { project?: Pr
 
       <div className="form-section">
         <h2>金額・メモ</h2>
-        <div className="form-grid two">
-          <label className="field"><span>見込金額</span><input type="number" name="expected_amount" min="0" step="1" defaultValue={project?.expectedAmount}/></label>
-          <label className="field"><span>受注金額</span><input type="number" name="order_amount" min="0" step="1" defaultValue={project?.orderAmount}/></label>
+        <ProjectPricingFields project={project}/>
+        <div className="form-grid two" style={{marginTop:16}}>
           <label className="field"><span>受注確度（%）</span><input type="number" name="win_probability" min="0" max="100" step="1" defaultValue={project?.winProbability} placeholder="未設定はステータス標準値"/></label>
           <label className="field"><span>受注見込日</span><input type="date" name="expected_close_date" defaultValue={project?.expectedCloseDate}/></label>
         </div>
