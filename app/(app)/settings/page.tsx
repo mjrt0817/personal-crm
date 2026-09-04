@@ -3,7 +3,6 @@ import SubmitButton from "@/components/SubmitButton";
 import { disconnectGoogleCalendar, saveActionPreferences } from "@/lib/actions";
 import { getGoogleCalendarConnectionStatus } from "@/lib/data";
 import { getActionPreferences } from "@/lib/preferences";
-import { getAiConfigStatus } from "@/lib/openai-server";
 
 function formatDateTime(value?: string) {
   if (!value) return "—";
@@ -15,11 +14,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const calendar = typeof params.calendar === "string" ? params.calendar : "";
   const actionRules = typeof params.action_rules === "string" ? params.action_rules : "";
   const [status, prefs] = await Promise.all([getGoogleCalendarConnectionStatus(), getActionPreferences()]);
-  const ai = getAiConfigStatus();
 
   return (
     <>
-      <div className="page-head"><div><h1>設定</h1><p className="muted">認証・Google Workspace・AI・優先アクション条件を管理します。</p></div></div>
+      <div className="page-head"><div><h1>設定</h1><p className="muted">認証・Google Workspace・データ管理・優先アクション条件を管理します。</p></div></div>
 
       {calendar === "connected" && <div className="notice success-notice">Google Workspaceとの接続が完了しました。</div>}
       {calendar === "disconnected" && <div className="notice">Google Workspaceとの接続を解除しました。</div>}
@@ -46,12 +44,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </div>
       </section>
 
-      <section className="card" style={{ marginBottom: 18 }}>
-        <div className="card-head"><h2>AI参謀</h2><span className={`badge ${ai.configured ? "green" : ""}`}>{ai.configured ? "利用可能" : "未設定"}</span></div>
+      <section className="card" style={{ marginBottom: 18 }} id="data-management">
+        <div className="card-head"><div><h2>データ管理</h2><div className="small muted">日常運用データのバックアップとアーカイブ管理</div></div></div>
         <div className="card-body">
-          <div className="kv"><div className="k">モデル</div><div>{ai.model}</div></div>
-          <div className="kv"><div className="k">APIキー</div><div>{ai.configured ? "Vercelに設定済み" : "OPENAI_API_KEY 未設定"}</div></div>
-          <p className="small muted" style={{ marginTop: 12 }}>AIは自動実行しません。「生成」ボタンを押した場合だけ、必要なCRMテキストをOpenAI APIへ送信します。APIキーはサーバー側のみで利用します。</p>
+          <p className="muted">全データバックアップはJSON形式で保存します。Google OAuthのRefresh TokenやVercelの秘密情報は含めません。</p>
+          <div className="row-actions" style={{ marginTop: 14, flexWrap: "wrap" }}>
+            <a className="button primary" href="/api/export/backup">全データをJSONバックアップ</a>
+            <a className="button" href="/archive">アーカイブを管理</a>
+          </div>
+          <div style={{ marginTop: 20 }}>
+            <div className="small muted" style={{ marginBottom: 8 }}>Excel等で確認するためのCSV出力</div>
+            <div className="row-actions" style={{ flexWrap: "wrap" }}>
+              <a className="button soft" href="/api/export/csv/companies">取引先CSV</a>
+              <a className="button soft" href="/api/export/csv/contacts">担当者CSV</a>
+              <a className="button soft" href="/api/export/csv/projects">案件CSV</a>
+              <a className="button soft" href="/api/export/csv/tasks">タスクCSV</a>
+              <a className="button soft" href="/api/export/csv/activities">活動履歴CSV</a>
+              <a className="button soft" href="/api/export/csv/schedules">予定CSV</a>
+            </div>
+          </div>
+          <p className="small muted" style={{ marginTop: 14 }}>Ver.2.3では安全性を優先し、バックアップからの自動復元は実装していません。復元が必要な場合はバックアップJSONを元に確認してから行います。</p>
         </div>
       </section>
 

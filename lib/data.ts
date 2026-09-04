@@ -819,3 +819,53 @@ export async function getProjectGmailSummary(projectId: string, limit = 8): Prom
     lastSyncError: syncResult.data?.last_sync_error ?? undefined
   };
 }
+
+export async function getArchivedItems() {
+  if (demoMode) return { projects: [], companies: [] };
+  const supabase = await createClient();
+  const [projectsResult, companiesResult] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("id,name,status,updated_at,company_id,companies(name)")
+      .eq("is_archived", true)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("companies")
+      .select("id,name,industry,updated_at")
+      .eq("is_archived", true)
+      .order("updated_at", { ascending: false })
+  ]);
+  if (projectsResult.error) throw new Error(projectsResult.error.message);
+  if (companiesResult.error) throw new Error(companiesResult.error.message);
+  return {
+    projects: (projectsResult.data ?? []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      status: p.status as Project["status"],
+      companyName: p.companies?.name ?? "取引先未設定",
+      archivedAt: p.updated_at
+    })),
+    companies: (companiesResult.data ?? []).map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      industry: c.industry ?? "—",
+      archivedAt: c.updated_at
+    }))
+  };
+}
+
+export async function getProjectListWithActivity() {
+  if (demoMode) return demoProjects.map((p) => ({ ...p, lastActivityAt: undefined as string | undefined }));
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select(`${PROJECT_BASE_SELECT},activities(activity_at)`)
+    .eq("is_archived", false)
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as any[]).map((row) => {
+    const project = mapProject(row as RawProject);
+    const dates = (row.activities ?? []).map((a: { activity_at: string }) => a.activity_at).filter(Boolean).sort().reverse();
+    return { ...project, lastActivityAt: dates[0] as string | undefined };
+  });
+}

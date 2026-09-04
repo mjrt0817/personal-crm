@@ -855,3 +855,34 @@ export async function saveActionPreferences(formData: FormData) {
   revalidatePath("/dashboard");
   redirect("/settings?action_rules=saved");
 }
+
+export async function restoreProject(formData: FormData) {
+  const id = required(formData, "id", "案件ID");
+  if (demoMode) demoReturn(formData, "/archive");
+  const { supabase } = await authed();
+  const { data: project, error: findError } = await supabase.from("projects").select("company_id").eq("id", id).single();
+  if (findError) throw new Error(findError.message);
+  const { error } = await supabase.from("projects").update({ is_archived: false }).eq("id", id);
+  if (error) throw new Error(error.message);
+  if (project?.company_id) {
+    const { error: companyError } = await supabase.from("companies").update({ is_archived: false }).eq("id", project.company_id);
+    if (companyError) throw new Error(companyError.message);
+  }
+  revalidatePath("/archive");
+  revalidatePath("/projects");
+  revalidatePath("/companies");
+  revalidatePath("/dashboard");
+  redirect("/archive?restored=project");
+}
+
+export async function restoreCompany(formData: FormData) {
+  const id = required(formData, "id", "取引先ID");
+  if (demoMode) demoReturn(formData, "/archive");
+  const { supabase } = await authed();
+  const { error } = await supabase.from("companies").update({ is_archived: false }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/archive");
+  revalidatePath("/companies");
+  revalidatePath("/dashboard");
+  redirect("/archive?restored=company");
+}
