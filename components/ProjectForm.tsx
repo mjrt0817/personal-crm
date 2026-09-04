@@ -48,7 +48,10 @@ export default function ProjectForm({ project, options, action }: { project?: Pr
         <div className="form-grid two">
           <label className="field"><span>見込金額</span><input type="number" name="expected_amount" min="0" step="1" defaultValue={project?.expectedAmount}/></label>
           <label className="field"><span>受注金額</span><input type="number" name="order_amount" min="0" step="1" defaultValue={project?.orderAmount}/></label>
+          <label className="field"><span>受注確度（%）</span><input type="number" name="win_probability" min="0" max="100" step="1" defaultValue={project?.winProbability} placeholder="未設定はステータス標準値"/></label>
+          <label className="field"><span>受注見込日</span><input type="date" name="expected_close_date" defaultValue={project?.expectedCloseDate}/></label>
         </div>
+        <p className="field-help">受注確度を未設定にした場合、パイプライン画面では案件ステータスに応じた標準確度を使用します。</p>
         <label className="field"><span>案件メモ</span><textarea name="memo" rows={5} defaultValue={project?.memo}/></label>
       </div>
 

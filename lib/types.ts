@@ -159,6 +159,8 @@ export type Project = {
   completedDate?: string;
   expectedAmount?: number;
   orderAmount?: number;
+  winProbability?: number;
+  expectedCloseDate?: string;
   nextAction?: string;
   nextActionDue?: string;
   nextSchedule?: string;
@@ -233,4 +235,31 @@ export type ProjectGmailSummary = {
   messages: GmailMessageItem[];
   lastSyncAt?: string;
   lastSyncError?: string;
+};
+
+
+export type PipelineStageSummary = {
+  status: ProjectStatus;
+  count: number;
+  expectedAmount: number;
+  weightedAmount: number;
+};
+
+export type PipelineMonthSummary = {
+  key: string;
+  label: string;
+  expectedAmount: number;
+  weightedAmount: number;
+  orderedAmount: number;
+};
+
+export type SalesPipelineSnapshot = {
+  openCount: number;
+  openExpectedAmount: number;
+  weightedExpectedAmount: number;
+  wonAmount: number;
+  currentMonthWonAmount: number;
+  stages: PipelineStageSummary[];
+  months: PipelineMonthSummary[];
+  opportunities: Array<Project & { effectiveProbability: number; weightedAmount: number }>;
 };

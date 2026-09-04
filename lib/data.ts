@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { companies as demoCompanies, projects as demoProjects, schedules as demoSchedules, tasks as demoTasks } from "@/lib/mock-data";
-import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail } from "@/lib/types";
+import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail, SalesPipelineSnapshot } from "@/lib/types";
 import { getActionPreferences } from "@/lib/preferences";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 const PROJECT_BASE_SELECT = `
-  id,name,company_id,primary_contact_id,category_id,status,priority,inquiry_date,proposal_date,order_date,start_date,due_date,completed_date,expected_amount,order_amount,next_action,next_action_due,description,memo,
+  id,name,company_id,primary_contact_id,category_id,status,priority,inquiry_date,proposal_date,order_date,start_date,due_date,completed_date,expected_amount,order_amount,win_probability,expected_close_date,next_action,next_action_due,description,memo,
   companies(name),
   contacts:primary_contact_id(name),
   project_categories(name)
@@ -27,6 +27,8 @@ type RawProject = {
   completed_date: string | null;
   expected_amount: number | null;
   order_amount: number | null;
+  win_probability: number | null;
+  expected_close_date: string | null;
   memo: string | null;
   description: string | null;
   company_id: string;
@@ -57,6 +59,8 @@ function mapProject(row: RawProject): Project {
     completedDate: row.completed_date ?? undefined,
     expectedAmount: row.expected_amount ?? undefined,
     orderAmount: row.order_amount ?? undefined,
+    winProbability: row.win_probability ?? undefined,
+    expectedCloseDate: row.expected_close_date ?? undefined,
     nextAction: row.next_action ?? undefined,
     nextActionDue: row.next_action_due
       ? new Date(row.next_action_due).toLocaleString("sv-SE", { timeZone: "Asia/Tokyo" }).slice(0, 16).replace(" ", "T")
@@ -868,4 +872,90 @@ export async function getProjectListWithActivity() {
     const dates = (row.activities ?? []).map((a: { activity_at: string }) => a.activity_at).filter(Boolean).sort().reverse();
     return { ...project, lastActivityAt: dates[0] as string | undefined };
   });
+}
+
+
+const DEFAULT_WIN_PROBABILITY: Record<Project["status"], number> = {
+  consultation: 10,
+  hearing: 20,
+  preparing: 35,
+  proposed: 50,
+  considering: 70,
+  ordered: 100,
+  in_progress: 100,
+  on_hold: 25,
+  completed: 100,
+  lost: 0
+};
+
+export function getEffectiveWinProbability(project: Project) {
+  return project.winProbability ?? DEFAULT_WIN_PROBABILITY[project.status] ?? 0;
+}
+
+function monthKeyJst(date: Date) {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" }).format(date);
+}
+
+function monthLabelFromKey(key: string) {
+  const [year, month] = key.split("-");
+  return `${Number(year)}年${Number(month)}月`;
+}
+
+export async function getSalesPipelineSnapshot(): Promise<SalesPipelineSnapshot> {
+  const projects = await getProjects();
+  const openStatuses = new Set<Project["status"]>(["consultation","hearing","preparing","proposed","considering","on_hold"]);
+  const wonStatuses = new Set<Project["status"]>(["ordered","in_progress","completed"]);
+  const open = projects.filter((p) => openStatuses.has(p.status));
+  const won = projects.filter((p) => wonStatuses.has(p.status));
+
+  const opportunities = open
+    .map((p) => {
+      const effectiveProbability = getEffectiveWinProbability(p);
+      const weightedAmount = Math.round((p.expectedAmount ?? 0) * effectiveProbability / 100);
+      return { ...p, effectiveProbability, weightedAmount };
+    })
+    .sort((a,b) => b.weightedAmount - a.weightedAmount || (a.expectedCloseDate ?? "9999-12-31").localeCompare(b.expectedCloseDate ?? "9999-12-31"));
+
+  const stageOrder: Project["status"][] = ["consultation","hearing","preparing","proposed","considering","on_hold"];
+  const stages = stageOrder.map((status) => {
+    const rows = opportunities.filter((p) => p.status === status);
+    return {
+      status,
+      count: rows.length,
+      expectedAmount: rows.reduce((sum,p) => sum + (p.expectedAmount ?? 0), 0),
+      weightedAmount: rows.reduce((sum,p) => sum + p.weightedAmount, 0)
+    };
+  });
+
+  const now = new Date();
+  const currentKey = monthKeyJst(now);
+  const currentJst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  const monthKeys: string[] = [];
+  for (let i=0;i<6;i++) {
+    const d = new Date(currentJst.getFullYear(), currentJst.getMonth()+i, 1);
+    monthKeys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+  }
+
+  const months = monthKeys.map((key) => {
+    const openRows = opportunities.filter((p) => p.expectedCloseDate?.slice(0,7) === key);
+    const wonRows = won.filter((p) => p.orderDate?.slice(0,7) === key);
+    return {
+      key,
+      label: monthLabelFromKey(key),
+      expectedAmount: openRows.reduce((sum,p) => sum + (p.expectedAmount ?? 0), 0),
+      weightedAmount: openRows.reduce((sum,p) => sum + p.weightedAmount, 0),
+      orderedAmount: wonRows.reduce((sum,p) => sum + (p.orderAmount ?? 0), 0)
+    };
+  });
+
+  return {
+    openCount: open.length,
+    openExpectedAmount: open.reduce((sum,p) => sum + (p.expectedAmount ?? 0), 0),
+    weightedExpectedAmount: opportunities.reduce((sum,p) => sum + p.weightedAmount, 0),
+    wonAmount: won.reduce((sum,p) => sum + (p.orderAmount ?? 0), 0),
+    currentMonthWonAmount: won.filter((p) => p.orderDate?.slice(0,7) === currentKey).reduce((sum,p) => sum + (p.orderAmount ?? 0), 0),
+    stages,
+    months,
+    opportunities
+  };
 }

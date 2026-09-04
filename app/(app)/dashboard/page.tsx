@@ -2,7 +2,7 @@ import Link from "next/link";
 import MetricCard from "@/components/MetricCard";
 import StatusBadge from "@/components/StatusBadge";
 import { markTaskFollowedUp } from "@/lib/actions";
-import { getDashboardSnapshot, getGoogleCalendarConnectionStatus } from "@/lib/data";
+import { getDashboardSnapshot, getGoogleCalendarConnectionStatus, getSalesPipelineSnapshot } from "@/lib/data";
 import { getActionPreferences } from "@/lib/preferences";
 
 function formatDateTime(value?: string) {
@@ -16,7 +16,7 @@ function dueLabel(value?: string | null) {
 }
 
 export default async function DashboardPage() {
-  const [snapshot, calendar, prefs] = await Promise.all([getDashboardSnapshot(), getGoogleCalendarConnectionStatus(), getActionPreferences()]);
+  const [snapshot, calendar, prefs, pipeline] = await Promise.all([getDashboardSnapshot(), getGoogleCalendarConnectionStatus(), getActionPreferences(), getSalesPipelineSnapshot()]);
 
   return (
     <>
@@ -42,6 +42,16 @@ export default async function DashboardPage() {
         <MetricCard label="期限超過" value={snapshot.overdueTaskCount} note="要対応"/>
         <MetricCard label="回答待ちフォロー" value={snapshot.waitingFollowupCount} note={`${prefs.waitingFollowupDays}日以上・指定日到来`}/>
       </div>
+
+      <section className="card pipeline-dashboard-card">
+        <div className="card-head"><h2>売上・見込</h2><Link href="/pipeline" className="small muted">パイプラインを見る →</Link></div>
+        <div className="card-body pipeline-dashboard-body">
+          <div className="pipeline-mini"><div className="label">商談中</div><div className="value">{pipeline.openCount}件</div></div>
+          <div className="pipeline-mini"><div className="label">見込総額</div><div className="value">{pipeline.openExpectedAmount.toLocaleString("ja-JP")}円</div></div>
+          <div className="pipeline-mini"><div className="label">加重見込</div><div className="value">{pipeline.weightedExpectedAmount.toLocaleString("ja-JP")}円</div></div>
+          <div className="pipeline-mini"><div className="label">今月受注</div><div className="value">{pipeline.currentMonthWonAmount.toLocaleString("ja-JP")}円</div></div>
+        </div>
+      </section>
 
       <section className="card focus-callout">
         <div className="card-body focus-callout-body">

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>業務管理 Ver.1 Prototype</title>
+<title>業務管理 Ver.2.4 Prototype</title>
 <style>
 :root{--bg:#f5f7fa;--surface:#fff;--text:#172033;--muted:#667085;--line:#e6eaf0;--accent:#2457d6;--soft:#edf3ff;--danger:#b42318;--warning:#b54708;--success:#067647;--r:14px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,"Yu Gothic",Meiryo,sans-serif}button,a{font:inherit}button{cursor:pointer}
@@ -24,9 +24,11 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:13px 14p
     <div class="nav">
       <button class="active" onclick="show('dashboard',this)">🏠 ホーム / 優先アクション</button>
       <button onclick="show('projects',this)">📁 案件</button>
+      <button onclick="show('pipeline',this)">📊 売上・見込</button>
       <button onclick="show('tasks',this)">✅ タスク</button>
       <button onclick="show('schedule',this)">📅 スケジュール</button>
       <button onclick="show('companies',this)">🏢 取引先</button>
+      <button onclick="show('assistant',this)">🤖 AI参謀</button>
     </div>
   </aside>
   <div class="main">
@@ -105,6 +107,22 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:13px 14p
           </div>
         </div>
       </section>
+
+      <section id="pipeline" class="screen">
+        <div class="head"><div><h1>売上・見込</h1><div class="muted">案件の見込金額と受注確度からパイプラインを確認します。</div></div></div>
+        <div class="metrics">
+          <div class="metric"><div class="small muted">商談中案件</div><div class="v">2</div></div>
+          <div class="metric"><div class="small muted">見込総額</div><div class="v">260,000円</div></div>
+          <div class="metric"><div class="small muted">加重見込</div><div class="v">128,000円</div></div>
+          <div class="metric"><div class="small muted">今月受注</div><div class="v">0円</div></div>
+        </div>
+        <div class="card" style="margin-top:18px;overflow:auto"><div class="ch"><h2>商談案件</h2></div><table><thead><tr><th>案件</th><th>状態</th><th>見込</th><th>確度</th><th>加重見込</th><th>受注見込日</th></tr></thead><tbody>
+          <tr><td>Webサイト改善</td><td>提案済</td><td>180,000円</td><td>60%</td><td>108,000円</td><td>9/20</td></tr>
+          <tr><td>業務管理ツール相談</td><td>ヒアリング</td><td>80,000円</td><td>25%</td><td>20,000円</td><td>10/15</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section id="assistant" class="screen"><div class="head"><div><h1>AI参謀</h1><div class="muted">AI機能は後回しですが、入口は残してあります。</div></div></div><div class="card"><div class="body">必要になった段階で再開します。</div></div></section>
 
       <section id="tasks" class="screen"><div class="head"><div><h1>タスク</h1><div class="muted">案件に紐づく作業をまとめて確認します。</div></div><button class="btn primary">＋ タスク</button></div><div class="card">
         <div class="row"><div class="grow"><div class="title">第2回支援資料作成</div><div class="small muted">ロジステック / DXコンシェルジュ支援</div></div><span class="badge blue">対応中</span><span class="badge red">高</span></div>

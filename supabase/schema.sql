@@ -69,6 +69,8 @@ create table if not exists public.projects (
   completed_date date,
   expected_amount numeric(12,0),
   order_amount numeric(12,0),
+  win_probability smallint check (win_probability is null or win_probability between 0 and 100),
+  expected_close_date date,
   next_action text,
   next_action_due timestamptz,
   memo text,

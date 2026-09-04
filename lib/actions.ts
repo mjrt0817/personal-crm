@@ -71,6 +71,7 @@ function returnTarget(formData: FormData, fallback: string) {
 function invalidateProjectMutation(projectId?: string | null) {
   revalidatePath("/dashboard");
   revalidatePath("/projects");
+  revalidatePath("/pipeline");
   revalidatePath("/companies");
   if (projectId) revalidatePath(`/projects/${projectId}`);
 }
@@ -174,6 +175,8 @@ export async function createProject(formData: FormData) {
     completed_date: optional(formData, "completed_date"),
     expected_amount: numberOrNull(formData, "expected_amount"),
     order_amount: numberOrNull(formData, "order_amount"),
+    win_probability: numberOrNull(formData, "win_probability"),
+    expected_close_date: optional(formData, "expected_close_date"),
     next_action: optional(formData, "next_action"),
     next_action_due: jstDateTimeOrNull(formData, "next_action_due"),
     memo: optional(formData, "memo")
@@ -204,6 +207,8 @@ export async function updateProject(formData: FormData) {
     completed_date: optional(formData, "completed_date") || (status === "completed" ? new Date().toISOString().slice(0, 10) : null),
     expected_amount: numberOrNull(formData, "expected_amount"),
     order_amount: numberOrNull(formData, "order_amount"),
+    win_probability: numberOrNull(formData, "win_probability"),
+    expected_close_date: optional(formData, "expected_close_date"),
     next_action: optional(formData, "next_action"),
     next_action_due: jstDateTimeOrNull(formData, "next_action_due"),
     memo: optional(formData, "memo")

@@ -38,6 +38,8 @@ export default async function ProjectDetailPage({
         <div className="kv"><div className="k">納期</div><div>{project.dueDate ?? "—"}</div></div>
         <div className="kv"><div className="k">見込金額</div><div>{project.expectedAmount != null ? `${project.expectedAmount.toLocaleString()}円` : "—"}</div></div>
         <div className="kv"><div className="k">受注金額</div><div>{project.orderAmount != null ? `${project.orderAmount.toLocaleString()}円` : "—"}</div></div>
+        <div className="kv"><div className="k">受注確度</div><div>{project.winProbability != null ? `${project.winProbability}%` : "ステータス標準値"}</div></div>
+        <div className="kv"><div className="k">受注見込日</div><div>{project.expectedCloseDate ?? "—"}</div></div>
         <div style={{ marginTop: 16 }}><div className="small muted">案件概要</div><p style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{project.description || "—"}</p></div>
       </div>
     </section>
