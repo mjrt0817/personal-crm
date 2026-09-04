@@ -14,7 +14,8 @@ export const BACKUP_TABLES = [
   "project_gmail_syncs",
   "gmail_messages",
   "user_preferences",
-  "project_invoices"
+  "project_invoices",
+  "invoice_settings"
 ] as const;
 
 export async function getBackupPayload() {
@@ -33,7 +34,7 @@ export async function getBackupPayload() {
 
   return {
     format: "personal-crm-backup",
-    version: "2.6",
+    version: "2.8",
     exported_at: new Date().toISOString(),
     note: "Google OAuth refresh token / secret information is intentionally excluded.",
     tables: Object.fromEntries(entries)

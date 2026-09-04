@@ -980,6 +980,124 @@ function invalidateBillingMutation(projectId?: string | null) {
   if (projectId) revalidatePath(`/projects/${projectId}`);
 }
 
+
+async function getInvoiceSettingsRow(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data, error } = await supabase.from("invoice_settings")
+    .select("issuer_name,issuer_postal_code,issuer_address,issuer_phone,issuer_email,registration_number,bank_name,bank_branch,bank_account_type,bank_account_number,bank_account_name,invoice_prefix,next_invoice_number,default_tax_rate,payment_note")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error && !["42P01", "PGRST205"].includes(error.code ?? "")) throw new Error(error.message);
+  return data ?? null;
+}
+
+async function allocateInvoiceReference(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  let settings = await getInvoiceSettingsRow(supabase, userId);
+  if (!settings) {
+    const { data, error } = await supabase.from("invoice_settings").insert({ user_id: userId }).select("invoice_prefix,next_invoice_number").single();
+    if (error) throw new Error(error.message);
+    settings = data as any;
+  }
+  const prefix = String(settings.invoice_prefix || "INV").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 20) || "INV";
+  const next = Math.max(1, Number(settings.next_invoice_number || 1));
+  const date = todayJstDate().replaceAll("-", "").slice(0, 6);
+  const reference = `${prefix}-${date}-${String(next).padStart(4, "0")}`;
+  const { error } = await supabase.from("invoice_settings").update({ next_invoice_number: next + 1 }).eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  return reference;
+}
+
+async function buildInvoiceSnapshots(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  companyId: string,
+  billing: { name?: string | null; postalCode?: string | null; address?: string | null }
+) {
+  const [settings, companyResult] = await Promise.all([
+    getInvoiceSettingsRow(supabase, userId),
+    supabase.from("companies").select("name,postal_code,address,phone,email").eq("id", companyId).single()
+  ]);
+  if (companyResult.error) throw new Error(companyResult.error.message);
+  const company = companyResult.data;
+  return {
+    issuer_snapshot: {
+      name: settings?.issuer_name || "",
+      postalCode: settings?.issuer_postal_code || undefined,
+      address: settings?.issuer_address || undefined,
+      phone: settings?.issuer_phone || undefined,
+      email: settings?.issuer_email || undefined,
+      registrationNumber: settings?.registration_number || undefined,
+      bankName: settings?.bank_name || undefined,
+      bankBranch: settings?.bank_branch || undefined,
+      bankAccountType: settings?.bank_account_type || undefined,
+      bankAccountNumber: settings?.bank_account_number || undefined,
+      bankAccountName: settings?.bank_account_name || undefined,
+      paymentNote: settings?.payment_note || undefined
+    },
+    customer_snapshot: {
+      name: billing.name || company.name,
+      postalCode: billing.postalCode || company.postal_code || undefined,
+      address: billing.address || company.address || undefined,
+      phone: company.phone || undefined,
+      email: company.email || undefined
+    },
+    issued_snapshot_at: new Date().toISOString()
+  };
+}
+
+async function issueInvoiceRecord(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  id: string,
+  projectId: string,
+  currentReference?: string | null,
+  invoiceDate?: string | null
+) {
+  const { data, error } = await supabase.from("project_invoices")
+    .select("company_id,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot")
+    .eq("id", id).eq("project_id", projectId).single();
+  if (error) throw new Error(error.message);
+  const update: Record<string, unknown> = { status: "invoiced", invoice_date: invoiceDate || todayJstDate() };
+  if (!currentReference) update.reference_no = await allocateInvoiceReference(supabase, userId);
+  if (!data.issuer_snapshot || !data.customer_snapshot) {
+    Object.assign(update, await buildInvoiceSnapshots(supabase, userId, data.company_id, {
+      name: data.billing_name,
+      postalCode: data.billing_postal_code,
+      address: data.billing_address
+    }));
+  }
+  const { error: updateError } = await supabase.from("project_invoices").update(update).eq("id", id).eq("project_id", projectId);
+  if (updateError) throw new Error(updateError.message);
+}
+
+export async function saveInvoiceSettings(formData: FormData) {
+  if (demoMode) demoReturn(formData, "/settings#invoice-settings");
+  const { supabase, userId } = await authed();
+  const defaultTax = numberOrNull(formData, "default_tax_rate") ?? 10;
+  const nextNumber = Math.max(1, Math.floor(numberOrNull(formData, "next_invoice_number") ?? 1));
+  const payload = {
+    user_id: userId,
+    issuer_name: text(formData, "issuer_name"),
+    issuer_postal_code: optional(formData, "issuer_postal_code"),
+    issuer_address: optional(formData, "issuer_address"),
+    issuer_phone: optional(formData, "issuer_phone"),
+    issuer_email: optional(formData, "issuer_email"),
+    registration_number: optional(formData, "registration_number"),
+    bank_name: optional(formData, "bank_name"),
+    bank_branch: optional(formData, "bank_branch"),
+    bank_account_type: optional(formData, "bank_account_type"),
+    bank_account_number: optional(formData, "bank_account_number"),
+    bank_account_name: optional(formData, "bank_account_name"),
+    invoice_prefix: text(formData, "invoice_prefix") || "INV",
+    next_invoice_number: nextNumber,
+    default_tax_rate: Math.max(0, Math.min(100, defaultTax)),
+    payment_note: optional(formData, "payment_note")
+  };
+  const { error } = await supabase.from("invoice_settings").upsert(payload, { onConflict: "user_id" });
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+  redirect("/settings?invoice_settings=saved#invoice-settings");
+}
+
 export async function createProjectInvoice(formData: FormData) {
   const projectId = required(formData, "project_id", "案件ID");
   if (demoMode) demoReturn(formData, `/projects/${projectId}?tab=billing`);
@@ -991,12 +1109,13 @@ export async function createProjectInvoice(formData: FormData) {
   const today = todayJstDate();
   const amount = numberOrNull(formData, "amount");
   if (amount == null) throw new Error("請求額は必須です。");
-  const { error } = await supabase.from("project_invoices").insert({
+  const taxRate = Math.max(0, Math.min(100, numberOrNull(formData, "tax_rate") ?? 0));
+  const insertPayload = {
     user_id: userId,
     project_id: projectId,
     company_id: project.company_id,
     title: required(formData, "title", "請求名"),
-    status,
+    status: status === "paid" ? "invoiced" : status,
     amount,
     unit_quantity: numberOrNull(formData, "unit_quantity"),
     unit_price: numberOrNull(formData, "unit_price"),
@@ -1005,9 +1124,22 @@ export async function createProjectInvoice(formData: FormData) {
     due_date: optional(formData, "due_date"),
     paid_date: optional(formData, "paid_date") || (status === "paid" ? today : null),
     reference_no: optional(formData, "reference_no"),
+    line_description: optional(formData, "line_description"),
+    tax_rate: taxRate,
+    billing_name: optional(formData, "billing_name"),
+    billing_postal_code: optional(formData, "billing_postal_code"),
+    billing_address: optional(formData, "billing_address"),
     memo: optional(formData, "memo")
-  });
+  };
+  const { data: created, error } = await supabase.from("project_invoices").insert(insertPayload).select("id,reference_no,invoice_date").single();
   if (error) throw new Error(error.message);
+  if (["invoiced","paid"].includes(status)) {
+    await issueInvoiceRecord(supabase, userId, created.id, projectId, created.reference_no, created.invoice_date);
+    if (status === "paid") {
+      const { error: paidError } = await supabase.from("project_invoices").update({ status: "paid", paid_date: insertPayload.paid_date || today }).eq("id", created.id);
+      if (paidError) throw new Error(paidError.message);
+    }
+  }
   invalidateBillingMutation(projectId);
   redirect(`/projects/${projectId}?tab=billing`);
 }
@@ -1016,15 +1148,18 @@ export async function updateProjectInvoice(formData: FormData) {
   const id = required(formData, "id", "請求ID");
   const projectId = required(formData, "project_id", "案件ID");
   if (demoMode) demoReturn(formData, `/projects/${projectId}?tab=billing`);
-  const { supabase } = await authed();
+  const { supabase, userId } = await authed();
   const rawStatus = text(formData, "status");
   const status = ["planned","invoiced","paid","cancelled"].includes(rawStatus) ? rawStatus : "planned";
   const today = todayJstDate();
   const amount = numberOrNull(formData, "amount");
   if (amount == null) throw new Error("請求額は必須です。");
+  const taxRate = Math.max(0, Math.min(100, numberOrNull(formData, "tax_rate") ?? 0));
+  const { data: current, error: currentError } = await supabase.from("project_invoices").select("status,reference_no,invoice_date").eq("id", id).eq("project_id", projectId).single();
+  if (currentError) throw new Error(currentError.message);
   const { error } = await supabase.from("project_invoices").update({
     title: required(formData, "title", "請求名"),
-    status,
+    status: status === "paid" ? "invoiced" : status,
     amount,
     unit_quantity: numberOrNull(formData, "unit_quantity"),
     unit_price: numberOrNull(formData, "unit_price"),
@@ -1032,10 +1167,22 @@ export async function updateProjectInvoice(formData: FormData) {
     invoice_date: optional(formData, "invoice_date") || (["invoiced","paid"].includes(status) ? today : null),
     due_date: optional(formData, "due_date"),
     paid_date: optional(formData, "paid_date") || (status === "paid" ? today : null),
-    reference_no: optional(formData, "reference_no"),
+    reference_no: optional(formData, "reference_no") || current.reference_no,
+    line_description: optional(formData, "line_description"),
+    tax_rate: taxRate,
+    billing_name: optional(formData, "billing_name"),
+    billing_postal_code: optional(formData, "billing_postal_code"),
+    billing_address: optional(formData, "billing_address"),
     memo: optional(formData, "memo")
   }).eq("id", id).eq("project_id", projectId);
   if (error) throw new Error(error.message);
+  if (["invoiced","paid"].includes(status)) {
+    await issueInvoiceRecord(supabase, userId, id, projectId, optional(formData, "reference_no") || current.reference_no, optional(formData, "invoice_date") || current.invoice_date);
+  }
+  if (status === "paid") {
+    const { error: paidError } = await supabase.from("project_invoices").update({ status: "paid", paid_date: optional(formData, "paid_date") || today }).eq("id", id);
+    if (paidError) throw new Error(paidError.message);
+  }
   invalidateBillingMutation(projectId);
   redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
 }
@@ -1044,22 +1191,19 @@ export async function advanceInvoiceStatus(formData: FormData) {
   const id = required(formData, "id", "請求ID");
   const projectId = required(formData, "project_id", "案件ID");
   if (demoMode) demoReturn(formData, returnTarget(formData, `/projects/${projectId}?tab=billing`));
-  const { supabase } = await authed();
-  const { data, error } = await supabase.from("project_invoices").select("status,invoice_date,paid_date").eq("id", id).single();
+  const { supabase, userId } = await authed();
+  const { data, error } = await supabase.from("project_invoices").select("status,invoice_date,paid_date,reference_no").eq("id", id).single();
   if (error) throw new Error(error.message);
   const today = todayJstDate();
-  const update: Record<string, unknown> = {};
   if (data.status === "planned") {
-    update.status = "invoiced";
-    update.invoice_date = data.invoice_date || today;
+    await issueInvoiceRecord(supabase, userId, id, projectId, data.reference_no, data.invoice_date || today);
   } else if (data.status === "invoiced") {
-    update.status = "paid";
-    update.paid_date = data.paid_date || today;
+    if (!data.reference_no) await issueInvoiceRecord(supabase, userId, id, projectId, data.reference_no, data.invoice_date || today);
+    const { error: updateError } = await supabase.from("project_invoices").update({ status: "paid", paid_date: data.paid_date || today }).eq("id", id);
+    if (updateError) throw new Error(updateError.message);
   } else {
     redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
   }
-  const { error: updateError } = await supabase.from("project_invoices").update(update).eq("id", id);
-  if (updateError) throw new Error(updateError.message);
   invalidateBillingMutation(projectId);
   redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
 }

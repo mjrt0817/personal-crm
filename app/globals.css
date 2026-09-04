@@ -484,3 +484,57 @@ button.task-check.done { background:var(--success); }
 .billing-filter-chips { margin-top:18px; }
 .billing-memo-preview { max-width:300px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .billing-mini small { display:block; margin-top:4px; font-size:11px; font-weight:600; }
+
+/* Ver.2.8: 請求書発行・印刷/PDF保存 */
+.inset-section { margin: 16px 0; padding: 14px; border:1px solid var(--line); border-radius:12px; background:var(--surface-2); }
+.inset-section h3 { margin-bottom:12px; font-size:14px; }
+.inline-settings-actions { justify-content:flex-end; margin-top:8px; }
+.invoice-document-shell { min-height:100vh; padding:24px; background:#eef1f5; }
+.invoice-document-toolbar { width:min(210mm,100%); margin:0 auto 14px; display:flex; justify-content:space-between; gap:12px; align-items:center; }
+.invoice-paper { width:210mm; min-height:297mm; margin:0 auto; background:white; padding:18mm 16mm 16mm; color:#111827; box-shadow:0 8px 30px rgba(17,24,39,.12); font-family:Arial,"Yu Gothic",Meiryo,sans-serif; }
+.invoice-doc-header { display:grid; grid-template-columns:1.2fr .8fr; gap:24px; align-items:start; }
+.invoice-doc-header h1 { margin:0 0 28px; text-align:center; letter-spacing:.28em; font-size:28px; font-weight:700; }
+.invoice-doc-customer { font-size:12px; line-height:1.7; }
+.invoice-customer-name { display:inline-block; min-width:86%; padding:0 0 7px; margin-bottom:8px; border-bottom:1px solid #111827; font-size:18px; font-weight:700; }
+.invoice-doc-meta { display:grid; gap:7px; font-size:11px; }
+.invoice-doc-meta > div { display:grid; grid-template-columns:86px 1fr; gap:10px; border-bottom:1px solid #d7dce3; padding-bottom:5px; }
+.invoice-doc-meta span { color:#667085; }
+.invoice-doc-meta strong { text-align:right; }
+.invoice-doc-parties { display:grid; grid-template-columns:1.2fr .8fr; gap:28px; margin-top:28px; align-items:end; }
+.invoice-doc-message p { margin-bottom:14px; font-size:12px; }
+.invoice-total-box { border-bottom:2px solid #111827; display:flex; justify-content:space-between; align-items:flex-end; padding:9px 4px 8px; }
+.invoice-total-box span { font-size:13px; font-weight:700; }
+.invoice-total-box strong { font-size:25px; }
+.invoice-issuer { font-size:11px; line-height:1.75; text-align:right; }
+.invoice-issuer > strong { display:block; font-size:15px; margin-bottom:5px; }
+.invoice-lines { margin-top:28px; width:100%; border-collapse:collapse; table-layout:fixed; }
+.invoice-lines th,.invoice-lines td { border:1px solid #9ca3af; padding:9px 8px; font-size:11px; }
+.invoice-lines th { background:#f3f4f6; color:#374151; text-align:center; }
+.invoice-lines th:first-child,.invoice-lines td:first-child { width:55%; text-align:left; }
+.invoice-lines th:nth-child(2),.invoice-lines td:nth-child(2) { width:12%; text-align:center; }
+.invoice-lines th:nth-child(3),.invoice-lines td:nth-child(3),.invoice-lines th:nth-child(4),.invoice-lines td:nth-child(4) { width:16.5%; text-align:right; }
+.invoice-totals { display:grid; grid-template-columns:1fr 260px; margin-top:14px; }
+.invoice-totals dl { margin:0; }
+.invoice-totals dl > div { display:grid; grid-template-columns:1fr 110px; gap:12px; padding:6px 4px; border-bottom:1px solid #d7dce3; font-size:11px; }
+.invoice-totals dt { color:#475467; }
+.invoice-totals dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; }
+.invoice-totals .grand { border-top:2px solid #111827; border-bottom:2px solid #111827; margin-top:6px; font-size:14px; font-weight:700; }
+.invoice-bank,.invoice-notes { margin-top:26px; font-size:11px; line-height:1.7; }
+.invoice-bank h2 { font-size:12px; margin:0 0 6px; }
+.invoice-notes { border-top:1px solid #d7dce3; padding-top:10px; }
+.invoice-notes p { margin:0 0 4px; white-space:pre-wrap; }
+.invoice-warning { margin-top:22px; padding:10px 12px; background:#fff8e8; border:1px solid #efd8a2; border-radius:8px; color:#76520e; font-size:12px; }
+
+@media(max-width:900px){
+  .invoice-document-shell { padding:12px; overflow-x:auto; }
+  .invoice-paper { transform-origin:top left; }
+  .invoice-document-toolbar { min-width:720px; }
+}
+
+@media print {
+  @page { size:A4 portrait; margin:0; }
+  html,body { background:white !important; }
+  .no-print { display:none !important; }
+  .invoice-document-shell { padding:0; background:white; min-height:auto; }
+  .invoice-paper { width:210mm; min-height:297mm; margin:0; padding:18mm 16mm 16mm; box-shadow:none; }
+}

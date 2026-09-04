@@ -48,7 +48,7 @@ export default async function ProjectBillingPage({params}:{params:Promise<{id:st
               <td><div className="row-actions billing-actions">
                 {inv.status === "planned" && <form action={advanceInvoiceStatus}><input type="hidden" name="id" value={inv.id}/><input type="hidden" name="project_id" value={id}/><input type="hidden" name="return_to" value={`/projects/${id}/billing`}/><button className="button soft">請求済みにする</button></form>}
                 {inv.status === "invoiced" && <form action={advanceInvoiceStatus}><input type="hidden" name="id" value={inv.id}/><input type="hidden" name="project_id" value={id}/><input type="hidden" name="return_to" value={`/projects/${id}/billing`}/><button className="button primary">入金済みにする</button></form>}
-                <Link className="icon-button edit" title="編集" href={`/billing/${inv.id}/edit`}>✎</Link>
+                <Link className="button soft" href={`/invoices/${inv.id}`} target="_blank">請求書</Link><Link className="icon-button edit" title="編集" href={`/billing/${inv.id}/edit`}>✎</Link>
                 {inv.status !== "cancelled" && inv.status !== "paid" && <form action={cancelProjectInvoice}><input type="hidden" name="id" value={inv.id}/><input type="hidden" name="project_id" value={id}/><input type="hidden" name="return_to" value={`/projects/${id}/billing`}/><button className="icon-button" title="取消">×</button></form>}
               </div></td>
             </tr>)}

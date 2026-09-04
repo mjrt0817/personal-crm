@@ -295,11 +295,62 @@ export type ProjectInvoice = {
   dueDate?: string;
   paidDate?: string;
   referenceNo?: string;
+  lineDescription?: string;
+  taxRate?: number;
+  billingName?: string;
+  billingPostalCode?: string;
+  billingAddress?: string;
+  issuerSnapshot?: InvoicePartySnapshot;
+  customerSnapshot?: InvoicePartySnapshot;
+  issuedSnapshotAt?: string;
   memo?: string;
   createdAt?: string;
   updatedAt?: string;
   overdue?: boolean;
   daysOverdue?: number;
+};
+
+
+export type InvoiceSettings = {
+  issuerName: string;
+  issuerPostalCode?: string;
+  issuerAddress?: string;
+  issuerPhone?: string;
+  issuerEmail?: string;
+  registrationNumber?: string;
+  bankName?: string;
+  bankBranch?: string;
+  bankAccountType?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+  invoicePrefix: string;
+  nextInvoiceNumber: number;
+  defaultTaxRate: number;
+  paymentNote?: string;
+};
+
+export type InvoicePartySnapshot = {
+  name?: string;
+  postalCode?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  registrationNumber?: string;
+  bankName?: string;
+  bankBranch?: string;
+  bankAccountType?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+  paymentNote?: string;
+};
+
+export type InvoiceDocumentData = {
+  invoice: ProjectInvoice;
+  project: Project;
+  issuer: InvoicePartySnapshot;
+  customer: InvoicePartySnapshot;
+  taxAmount: number;
+  subtotal: number;
 };
 
 export type ProjectBillingSummary = {

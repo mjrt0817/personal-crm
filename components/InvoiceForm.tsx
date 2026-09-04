@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import SubmitButton from "@/components/SubmitButton";
-import type { Project, ProjectBillingSummary, ProjectInvoice } from "@/lib/types";
+import type { CompanyDetail, InvoiceSettings, Project, ProjectBillingSummary, ProjectInvoice } from "@/lib/types";
 
 const statuses = [
   ["planned", "未請求（予定）"],
@@ -17,11 +17,15 @@ function todayJst() {
 
 export default function InvoiceForm({
   project,
+  company,
+  settings,
   summary,
   invoice,
   action
 }: {
   project: Project;
+  company: CompanyDetail;
+  settings: InvoiceSettings;
   summary?: ProjectBillingSummary;
   invoice?: ProjectInvoice;
   action: (formData: FormData) => void | Promise<void>;
@@ -35,6 +39,9 @@ export default function InvoiceForm({
   const [amount, setAmount] = useState(initialAmount);
   const calculated = useMemo(() => Math.max(0, quantity) * Math.max(0, unitPrice), [quantity, unitPrice]);
   const isNew = !invoice;
+  const defaultLine = unitMode && initialQty > 0
+    ? `${project.name}（${initialQty}${project.unitLabel ?? "回"}）`
+    : project.name;
 
   function updateQty(value: number) {
     setQuantity(value);
@@ -57,6 +64,7 @@ export default function InvoiceForm({
           <label className="field"><span>請求名 *</span><input name="title" required defaultValue={invoice?.title ?? `${project.name} 請求`}/></label>
           <label className="field"><span>状態</span><select name="status" defaultValue={invoice?.status ?? "planned"}>{statuses.map(([v,l]) => <option key={v} value={v}>{l}</option>)}</select></label>
         </div>
+        <label className="field"><span>請求書の明細名</span><input name="line_description" defaultValue={invoice?.lineDescription ?? defaultLine}/><small>請求書PDFに表示する品目名です。</small></label>
 
         {unitMode && (
           <>
@@ -79,6 +87,20 @@ export default function InvoiceForm({
             {isNew && summary && <div className="field billing-hint"><span>未割当の売上</span><strong>{summary.unallocatedAmount.toLocaleString("ja-JP")}円</strong><small>今回の候補額を初期入力しています。</small></div>}
           </div>
         )}
+        <div className="form-grid two">
+          <label className="field"><span>消費税率</span><select name="tax_rate" defaultValue={String(invoice?.taxRate ?? settings.defaultTaxRate)}><option value="0">0% / 対象外</option><option value="8">8%</option><option value="10">10%</option></select><small>請求額は税込総額として扱い、請求書上で内消費税を表示します。</small></label>
+          <label className="field"><span>請求書番号</span><input name="reference_no" defaultValue={invoice?.referenceNo}/><small>空欄のまま「請求済」にすると自動採番します。</small></label>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <h2>請求先</h2>
+        <div className="form-grid two">
+          <label className="field"><span>宛名</span><input name="billing_name" defaultValue={invoice?.billingName ?? company.name}/></label>
+          <label className="field"><span>郵便番号</span><input name="billing_postal_code" defaultValue={invoice?.billingPostalCode ?? company.postalCode}/></label>
+        </div>
+        <label className="field"><span>住所</span><input name="billing_address" defaultValue={invoice?.billingAddress ?? company.address}/></label>
+        <p className="field-help">請求書発行時にこの内容をスナップショット保存するため、後で取引先情報が変わっても発行済み請求書の宛先は維持されます。</p>
       </div>
 
       <div className="form-section">
@@ -93,10 +115,6 @@ export default function InvoiceForm({
 
       <div className="form-section">
         <h2>管理情報</h2>
-        <div className="form-grid two">
-          <label className="field"><span>請求書番号・管理番号</span><input name="reference_no" defaultValue={invoice?.referenceNo}/></label>
-          <label className="field"><span>取引先</span><input value={project.companyName} disabled/></label>
-        </div>
         <label className="field"><span>メモ</span><textarea name="memo" rows={4} defaultValue={invoice?.memo}/></label>
       </div>
 

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { companies as demoCompanies, projects as demoProjects, schedules as demoSchedules, tasks as demoTasks } from "@/lib/mock-data";
-import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail, SalesPipelineSnapshot, ProjectInvoice, ProjectBillingSummary, BillingSnapshot, BillingStatus } from "@/lib/types";
+import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail, SalesPipelineSnapshot, ProjectInvoice, ProjectBillingSummary, BillingSnapshot, BillingStatus, InvoiceSettings, InvoiceDocumentData, InvoicePartySnapshot } from "@/lib/types";
 import { getActionPreferences } from "@/lib/preferences";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
@@ -1032,6 +1032,14 @@ function mapInvoiceRow(row: any): ProjectInvoice {
     dueDate: row.due_date ?? undefined,
     paidDate: row.paid_date ?? undefined,
     referenceNo: row.reference_no ?? undefined,
+    lineDescription: row.line_description ?? undefined,
+    taxRate: numericOrUndefined(row.tax_rate) ?? 0,
+    billingName: row.billing_name ?? undefined,
+    billingPostalCode: row.billing_postal_code ?? undefined,
+    billingAddress: row.billing_address ?? undefined,
+    issuerSnapshot: (row.issuer_snapshot ?? undefined) as InvoicePartySnapshot | undefined,
+    customerSnapshot: (row.customer_snapshot ?? undefined) as InvoicePartySnapshot | undefined,
+    issuedSnapshotAt: row.issued_snapshot_at ?? undefined,
     memo: row.memo ?? undefined,
     createdAt: row.created_at ?? undefined,
     updatedAt: row.updated_at ?? undefined,
@@ -1045,7 +1053,7 @@ export async function getInvoiceDetail(id: string): Promise<ProjectInvoice | nul
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("project_invoices")
-    .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
+    .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,line_description,tax_rate,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot,issued_snapshot_at,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
     .eq("id", id)
     .single();
   if (error) {
@@ -1069,7 +1077,7 @@ export async function getProjectBillingSummary(projectId: string): Promise<Proje
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("project_invoices")
-    .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
+    .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,line_description,tax_rate,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot,issued_snapshot_at,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
   if (error) {
@@ -1112,7 +1120,7 @@ export async function getBillingSnapshot(): Promise<BillingSnapshot> {
   const [invoiceResult, projectResult] = await Promise.all([
     supabase
       .from("project_invoices")
-      .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
+      .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,line_description,tax_rate,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot,issued_snapshot_at,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false }),
     supabase
@@ -1171,4 +1179,80 @@ export async function getBillingSnapshot(): Promise<BillingSnapshot> {
     dueSoonCount: dueSoonRows.length,
     invoices
   };
+}
+
+
+export async function getInvoiceSettings(): Promise<InvoiceSettings> {
+  const defaults: InvoiceSettings = {
+    issuerName: "",
+    invoicePrefix: "INV",
+    nextInvoiceNumber: 1,
+    defaultTaxRate: 10
+  };
+  if (demoMode) return defaults;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("invoice_settings")
+    .select("issuer_name,issuer_postal_code,issuer_address,issuer_phone,issuer_email,registration_number,bank_name,bank_branch,bank_account_type,bank_account_number,bank_account_name,invoice_prefix,next_invoice_number,default_tax_rate,payment_note")
+    .maybeSingle();
+  if (error) {
+    if (["42P01", "PGRST205"].includes(error.code ?? "")) return defaults;
+    throw new Error(error.message);
+  }
+  if (!data) return defaults;
+  return {
+    issuerName: data.issuer_name ?? "",
+    issuerPostalCode: data.issuer_postal_code ?? undefined,
+    issuerAddress: data.issuer_address ?? undefined,
+    issuerPhone: data.issuer_phone ?? undefined,
+    issuerEmail: data.issuer_email ?? undefined,
+    registrationNumber: data.registration_number ?? undefined,
+    bankName: data.bank_name ?? undefined,
+    bankBranch: data.bank_branch ?? undefined,
+    bankAccountType: data.bank_account_type ?? undefined,
+    bankAccountNumber: data.bank_account_number ?? undefined,
+    bankAccountName: data.bank_account_name ?? undefined,
+    invoicePrefix: data.invoice_prefix ?? "INV",
+    nextInvoiceNumber: Number(data.next_invoice_number ?? 1),
+    defaultTaxRate: Number(data.default_tax_rate ?? 10),
+    paymentNote: data.payment_note ?? undefined
+  };
+}
+
+export async function getInvoiceDocumentData(id: string): Promise<InvoiceDocumentData | null> {
+  if (demoMode) return null;
+  const invoice = await getInvoiceDetail(id);
+  if (!invoice) return null;
+  const [project, company, settings] = await Promise.all([
+    getProjectBase(invoice.projectId),
+    getCompanyBase(invoice.companyId),
+    getInvoiceSettings()
+  ]);
+  if (!project || !company) return null;
+
+  const issuer: InvoicePartySnapshot = invoice.issuerSnapshot ?? {
+    name: settings.issuerName,
+    postalCode: settings.issuerPostalCode,
+    address: settings.issuerAddress,
+    phone: settings.issuerPhone,
+    email: settings.issuerEmail,
+    registrationNumber: settings.registrationNumber,
+    bankName: settings.bankName,
+    bankBranch: settings.bankBranch,
+    bankAccountType: settings.bankAccountType,
+    bankAccountNumber: settings.bankAccountNumber,
+    bankAccountName: settings.bankAccountName,
+    paymentNote: settings.paymentNote
+  };
+  const customer: InvoicePartySnapshot = invoice.customerSnapshot ?? {
+    name: invoice.billingName || company.name,
+    postalCode: invoice.billingPostalCode || company.postalCode,
+    address: invoice.billingAddress || company.address,
+    phone: company.phone,
+    email: company.email
+  };
+  const rate = Math.max(0, invoice.taxRate ?? 0);
+  const taxAmount = rate > 0 ? Math.floor(invoice.amount * rate / (100 + rate)) : 0;
+  const subtotal = invoice.amount - taxAmount;
+  return { invoice, project, issuer, customer, taxAmount, subtotal };
 }

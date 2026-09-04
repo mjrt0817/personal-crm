@@ -1,7 +1,7 @@
 import GoogleCalendarConnectButton from "@/components/GoogleCalendarConnectButton";
 import SubmitButton from "@/components/SubmitButton";
-import { disconnectGoogleCalendar, saveActionPreferences } from "@/lib/actions";
-import { getGoogleCalendarConnectionStatus } from "@/lib/data";
+import { disconnectGoogleCalendar, saveActionPreferences, saveInvoiceSettings } from "@/lib/actions";
+import { getGoogleCalendarConnectionStatus, getInvoiceSettings } from "@/lib/data";
 import { getActionPreferences } from "@/lib/preferences";
 
 function formatDateTime(value?: string) {
@@ -13,7 +13,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const params = await searchParams;
   const calendar = typeof params.calendar === "string" ? params.calendar : "";
   const actionRules = typeof params.action_rules === "string" ? params.action_rules : "";
-  const [status, prefs] = await Promise.all([getGoogleCalendarConnectionStatus(), getActionPreferences()]);
+  const invoiceSettingsSaved = typeof params.invoice_settings === "string" ? params.invoice_settings : "";
+  const [status, prefs, invoiceSettings] = await Promise.all([getGoogleCalendarConnectionStatus(), getActionPreferences(), getInvoiceSettings()]);
 
   return (
     <>
@@ -23,6 +24,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {calendar === "disconnected" && <div className="notice">Google Workspaceとの接続を解除しました。</div>}
       {calendar === "save_error" && <div className="notice error-notice">Google連携情報を保存できませんでした。Vercel環境変数とDB migrationを確認してください。</div>}
       {actionRules === "saved" && <div className="notice success-notice">優先アクションの判定条件を保存しました。</div>}
+      {invoiceSettingsSaved === "saved" && <div className="notice success-notice">請求書の発行者情報を保存しました。</div>}
 
       <section className="card" style={{ marginBottom: 18 }}>
         <div className="card-head"><h2>Google Workspace</h2><span className={`badge ${status.connected ? "green" : ""}`}>{status.connected ? "接続済み" : "未接続"}</span></div>
@@ -66,6 +68,44 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </div>
           <p className="small muted" style={{ marginTop: 14 }}>Ver.2.3では安全性を優先し、バックアップからの自動復元は実装していません。復元が必要な場合はバックアップJSONを元に確認してから行います。</p>
         </div>
+      </section>
+
+
+      <section className="card" id="invoice-settings" style={{ marginBottom: 18 }}>
+        <div className="card-head"><div><h2>請求書設定</h2><div className="small muted">請求書に表示する発行者・振込先・採番ルール</div></div></div>
+        <form action={saveInvoiceSettings} className="card-body settings-form">
+          <div className="form-grid two">
+            <label className="field"><span>発行者名 / 屋号</span><input name="issuer_name" defaultValue={invoiceSettings.issuerName}/><small>例：アカンパニー・パートナーズ</small></label>
+            <label className="field"><span>適格請求書発行事業者 登録番号</span><input name="registration_number" defaultValue={invoiceSettings.registrationNumber}/><small>登録している場合のみ。例：T1234567890123</small></label>
+          </div>
+          <div className="form-grid two">
+            <label className="field"><span>郵便番号</span><input name="issuer_postal_code" defaultValue={invoiceSettings.issuerPostalCode}/></label>
+            <label className="field"><span>住所</span><input name="issuer_address" defaultValue={invoiceSettings.issuerAddress}/></label>
+          </div>
+          <div className="form-grid two">
+            <label className="field"><span>電話番号</span><input name="issuer_phone" defaultValue={invoiceSettings.issuerPhone}/></label>
+            <label className="field"><span>メール</span><input type="email" name="issuer_email" defaultValue={invoiceSettings.issuerEmail}/></label>
+          </div>
+          <div className="form-section inset-section">
+            <h3>振込先</h3>
+            <div className="form-grid two">
+              <label className="field"><span>銀行名</span><input name="bank_name" defaultValue={invoiceSettings.bankName}/></label>
+              <label className="field"><span>支店名</span><input name="bank_branch" defaultValue={invoiceSettings.bankBranch}/></label>
+            </div>
+            <div className="form-grid three">
+              <label className="field"><span>口座種別</span><input name="bank_account_type" defaultValue={invoiceSettings.bankAccountType ?? "普通"}/></label>
+              <label className="field"><span>口座番号</span><input name="bank_account_number" defaultValue={invoiceSettings.bankAccountNumber}/></label>
+              <label className="field"><span>口座名義</span><input name="bank_account_name" defaultValue={invoiceSettings.bankAccountName}/></label>
+            </div>
+          </div>
+          <div className="form-grid three">
+            <label className="field"><span>請求書番号の接頭辞</span><input name="invoice_prefix" defaultValue={invoiceSettings.invoicePrefix}/><small>例：INV → INV-202609-0001</small></label>
+            <label className="field"><span>次回採番番号</span><input type="number" min="1" name="next_invoice_number" defaultValue={invoiceSettings.nextInvoiceNumber}/></label>
+            <label className="field"><span>新規請求の既定税率</span><select name="default_tax_rate" defaultValue={String(invoiceSettings.defaultTaxRate)}><option value="0">0%</option><option value="8">8%</option><option value="10">10%</option></select></label>
+          </div>
+          <label className="field"><span>支払・振込に関する注記</span><textarea name="payment_note" rows={3} defaultValue={invoiceSettings.paymentNote} placeholder="例：振込手数料は貴社にてご負担ください。"/></label>
+          <div className="form-actions inline-settings-actions"><SubmitButton>請求書設定を保存</SubmitButton></div>
+        </form>
       </section>
 
       <section className="card" id="action-rules" style={{ marginBottom: 18 }}>
