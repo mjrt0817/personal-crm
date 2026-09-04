@@ -28,6 +28,16 @@ export default async function PipelinePage() {
         <MetricCard label="受注・進行中見込" value={yen(pipeline.wonAmount)} note={`実施済み ${yen(pipeline.realizedAmount)}`}/>
       </div>
 
+      <section className="card billing-pipeline-card">
+        <div className="card-head"><h2>請求・入金状況</h2><Link href="/billing" className="small muted">請求・入金を見る →</Link></div>
+        <div className="card-body pipeline-dashboard-body">
+          <div className="pipeline-mini"><div className="label">未請求</div><div className="value">{yen(pipeline.unbilledAmount)}</div></div>
+          <div className="pipeline-mini"><div className="label">未入金</div><div className="value">{yen(pipeline.outstandingAmount)}</div></div>
+          <div className={`pipeline-mini ${pipeline.overdueAmount > 0 ? "is-danger" : ""}`}><div className="label">期限超過</div><div className="value">{yen(pipeline.overdueAmount)}</div></div>
+          <div className="pipeline-mini"><div className="label">入金済</div><div className="value">{yen(pipeline.paidAmount)}</div></div>
+        </div>
+      </section>
+
       <div className="two-col">
         <section className="card">
           <div className="card-head"><h2>ステータス別パイプライン</h2><span className="small muted">未受注案件</span></div>

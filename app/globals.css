@@ -426,3 +426,42 @@ button.task-check.done { background:var(--success); }
   .unit-stepper form { flex:1; }
   .unit-stepper .button { width:100%; }
 }
+
+/* Ver.2.6: 請求・入金管理 */
+.billing-kpis { margin-bottom:18px; }
+.billing-pipeline-card, .billing-dashboard-card, .project-billing-summary { margin-top:18px; margin-bottom:18px; }
+.billing-mini-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.billing-mini { border:1px solid var(--line); background:var(--surface-2); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:5px; }
+.billing-mini span { color:var(--muted); font-size:12px; font-weight:700; }
+.billing-mini strong { font-size:18px; }
+.billing-mini.is-danger, .pipeline-mini.is-danger { border-color:#f0b8b8; background:#fff7f7; }
+.billing-mini.is-danger strong, .pipeline-mini.is-danger .value, .danger-text { color:var(--danger); }
+.billing-project-hint { margin:0 20px 18px; padding:11px 13px; border-radius:10px; background:#fff8e8; border:1px solid #efd8a2; color:#76520e; font-size:13px; }
+.billing-suggest-card { margin-bottom:18px; border-color:#cbd8f5; }
+.billing-suggest-body { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.billing-suggest-value { margin-top:5px; font-size:16px; }
+.billing-table { width:100%; border-collapse:collapse; min-width:900px; }
+.billing-table th, .billing-table td { padding:12px 14px; text-align:left; border-bottom:1px solid var(--line); vertical-align:middle; }
+.billing-table th { font-size:12px; color:var(--muted); background:var(--surface-2); white-space:nowrap; }
+.billing-table tr:last-child td { border-bottom:0; }
+.billing-overdue-row { background:#fff8f8; }
+.billing-cancelled-row { opacity:.58; }
+.billing-actions { gap:6px; flex-wrap:wrap; }
+.billing-actions .button { white-space:nowrap; }
+.billing-suggestion { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0 0 14px; }
+.billing-suggestion > div { background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; flex-direction:column; gap:4px; }
+.billing-suggestion span { font-size:12px; color:var(--muted); }
+.billing-hint { border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--surface-2); }
+.billing-hint strong { display:block; font-size:18px; margin-top:4px; }
+.danger-zone-card { border-color:#efcaca; }
+@media (max-width: 900px) {
+  .billing-mini-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .billing-suggestion { grid-template-columns:1fr; }
+  .billing-suggest-body { flex-direction:column; align-items:stretch; }
+}
+@media (max-width: 640px) {
+  .billing-mini-grid { grid-template-columns:1fr 1fr; }
+  .project-billing-summary .card-head { align-items:flex-start; }
+  .project-billing-summary .row-actions { width:100%; }
+  .project-billing-summary .row-actions .button { flex:1; }
+}

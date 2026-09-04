@@ -61,6 +61,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <a className="button soft" href="/api/export/csv/tasks">タスクCSV</a>
               <a className="button soft" href="/api/export/csv/activities">活動履歴CSV</a>
               <a className="button soft" href="/api/export/csv/schedules">予定CSV</a>
+              <a className="button soft" href="/api/export/csv/invoices">請求・入金CSV</a>
             </div>
           </div>
           <p className="small muted" style={{ marginTop: 14 }}>Ver.2.3では安全性を優先し、バックアップからの自動復元は実装していません。復元が必要な場合はバックアップJSONを元に確認してから行います。</p>

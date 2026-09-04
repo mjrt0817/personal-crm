@@ -53,6 +53,16 @@ export default async function DashboardPage() {
         </div>
       </section>
 
+      <section className="card billing-dashboard-card">
+        <div className="card-head"><h2>請求・入金</h2><Link href="/billing" className="small muted">請求・入金を確認 →</Link></div>
+        <div className="card-body pipeline-dashboard-body">
+          <div className="pipeline-mini"><div className="label">未請求</div><div className="value">{pipeline.unbilledAmount.toLocaleString("ja-JP")}円</div></div>
+          <div className="pipeline-mini"><div className="label">未入金</div><div className="value">{pipeline.outstandingAmount.toLocaleString("ja-JP")}円</div></div>
+          <div className={`pipeline-mini ${pipeline.overdueAmount > 0 ? "is-danger" : ""}`}><div className="label">期限超過</div><div className="value">{pipeline.overdueAmount.toLocaleString("ja-JP")}円</div></div>
+          <div className="pipeline-mini"><div className="label">入金済</div><div className="value">{pipeline.paidAmount.toLocaleString("ja-JP")}円</div></div>
+        </div>
+      </section>
+
       <section className="card focus-callout">
         <div className="card-body focus-callout-body">
           <div>
