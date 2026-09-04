@@ -9,6 +9,8 @@ import { priorityLabel } from "@/lib/mock-data";
 import { getProject, getProjectDriveSummary, getProjectGmailSummary } from "@/lib/data";
 import { archiveProject, deleteActivity, deleteProjectLink, deleteTask, markTaskFollowedUp, syncProjectDriveFolderNow } from "@/lib/actions";
 import TaskStatusToggle from "@/components/TaskStatusToggle";
+import ProjectAiSummary from "@/components/ProjectAiSummary";
+import { getAiConfigStatus } from "@/lib/openai-server";
 
 const VALID_TABS = new Set(["overview", "activities", "tasks", "schedule", "links", "drive", "memo"]);
 
@@ -23,6 +25,7 @@ export default async function ProjectDetailPage({
   const query = await searchParams;
   const initialTab = query.tab && VALID_TABS.has(query.tab) ? query.tab : "overview";
   const [project, drive, gmail] = await Promise.all([getProject(id), getProjectDriveSummary(id, 8), getProjectGmailSummary(id, 8)]);
+  const ai = getAiConfigStatus();
   if (!project) notFound();
 
   const overview = (
@@ -76,7 +79,7 @@ export default async function ProjectDetailPage({
             <div className="grow">
               <div className="list-title">{t.title}</div>
               <div className="small muted">期限：{t.due}</div>
-              {t.status === "waiting" && <div className="task-wait-meta"><span className={`badge ${t.followUpCandidate ? "red" : "orange"}`}>待ち {t.waitingDays ?? 0}日</span>{t.followUpAt ? <span className="small muted">フォロー予定：{new Date(t.followUpAt).toLocaleString("ja-JP", { timeZone:"Asia/Tokyo", month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" })}</span> : <span className="small muted">3日経過でフォロー候補</span>}</div>}
+              {t.status === "waiting" && <div className="task-wait-meta"><span className={`badge ${t.followUpCandidate ? "red" : "orange"}`}>待ち {t.waitingDays ?? 0}日</span>{t.followUpAt ? <span className="small muted">フォロー予定：{new Date(t.followUpAt).toLocaleString("ja-JP", { timeZone:"Asia/Tokyo", month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" })}</span> : <span className="small muted">設定日数経過でフォロー候補</span>}</div>}
             </div>
             <span className="badge">{t.priority === "high" ? "高" : t.priority === "medium" ? "中" : "低"}</span>
             {t.followUpCandidate && <form action={markTaskFollowedUp}><input type="hidden" name="id" value={t.id}/><input type="hidden" name="project_id" value={id}/><input type="hidden" name="return_to" value={`/projects/${id}?tab=tasks`}/><button className="button followup-button">フォロー済み</button></form>}
@@ -168,6 +171,8 @@ export default async function ProjectDetailPage({
         <div className="next-action"><div className="action-box"><div className="label">次回予定</div><div className="value">{project.nextSchedule ?? "未設定"}</div><Link className="small link-text" href={`/projects/${id}/schedule/new`}>＋ 予定を追加</Link></div><div className="action-box"><div className="label">次にやること</div><div className="value">{project.nextAction ?? "未設定"}</div><div className="small muted">期限：{project.nextActionDue ? project.nextActionDue.replace("T", " ") : "—"}</div></div></div>
         <QuickLinks links={project.links}/>
       </section>
+
+      <ProjectAiSummary projectId={id} configured={ai.configured}/>
 
       <ProjectDetailTabs
         initialTab={initialTab}

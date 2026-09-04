@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Priority, ProjectStatus, TaskStatus } from "@/lib/types";
+import { getActionPreferences } from "@/lib/preferences";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
@@ -69,12 +70,12 @@ export async function getActionCenterSnapshot(): Promise<ActionCenterSnapshot> {
     return { generatedAt:new Date().toISOString(), today:all.filter((x)=>x.bucket==="today"), week:all.filter((x)=>x.bucket==="week"), watch:all.filter((x)=>x.bucket==="watch"), all };
   }
 
-  const supabase = await createClient();
+  const [supabase, prefs] = await Promise.all([createClient(), getActionPreferences()]);
   const activeStatuses: ProjectStatus[] = ["consultation","hearing","preparing","proposed","considering","ordered","in_progress","on_hold"];
   const nowIso = new Date(now).toISOString();
-  const weekEndIso = new Date(now + 7 * DAY).toISOString();
-  const gmailCutoffIso = new Date(now - 7 * DAY).toISOString();
-  const staleCutoffIso = new Date(now - 14 * DAY).toISOString();
+  const scheduleEndIso = new Date(now + prefs.scheduleHorizonDays * DAY).toISOString();
+  const gmailCutoffIso = new Date(now - prefs.gmailLookbackDays * DAY).toISOString();
+  const staleCutoffIso = new Date(now - prefs.staleProjectDays * DAY).toISOString();
 
   const [taskResult, projectResult, scheduleResult, activityResult, gmailResult] = await Promise.all([
     supabase.from("tasks")
@@ -89,7 +90,7 @@ export async function getActionCenterSnapshot(): Promise<ActionCenterSnapshot> {
     supabase.from("schedules")
       .select("id,title,start_at,project_id,companies(name),projects(name)")
       .gte("start_at", nowIso)
-      .lte("start_at", weekEndIso)
+      .lte("start_at", scheduleEndIso)
       .order("start_at", { ascending:true })
       .limit(120),
     supabase.from("activities")
@@ -125,7 +126,7 @@ export async function getActionCenterSnapshot(): Promise<ActionCenterSnapshot> {
 
     if (task.status === "waiting" && task.waiting_since) {
       const waitingDays = daysSince(task.waiting_since, now);
-      const followDue = task.follow_up_at ? new Date(task.follow_up_at).getTime() <= now : waitingDays >= 3;
+      const followDue = task.follow_up_at ? new Date(task.follow_up_at).getTime() <= now : waitingDays >= prefs.waitingFollowupDays;
       if (followDue) {
         pushCandidate(actions, {
           id:`follow-${task.id}`, kind:"followup", score:94 + Math.min(waitingDays, 10) + bonus,
@@ -143,8 +144,8 @@ export async function getActionCenterSnapshot(): Promise<ActionCenterSnapshot> {
         pushCandidate(actions, { id:`task-${task.id}`, kind:"task", score:100 + Math.min(Math.abs(days), 10) + bonus, badge:"期限超過", tone:"red", title:task.title, reason:`期限を${Math.abs(days)}日過ぎています`, companyName, projectName, projectId:task.project_id ?? undefined, href, dueAt:task.due_at });
       } else if (days <= 1) {
         pushCandidate(actions, { id:`task-${task.id}`, kind:"task", score:88 + bonus, badge:"今日期限", tone:"red", title:task.title, reason:"今日〜24時間以内が期限です", companyName, projectName, projectId:task.project_id ?? undefined, href, dueAt:task.due_at });
-      } else if (days <= 7) {
-        pushCandidate(actions, { id:`task-${task.id}`, kind:"task", score:70 + bonus - days, badge:"今週期限", tone:"blue", title:task.title, reason:`${days}日以内に期限が来ます`, companyName, projectName, projectId:task.project_id ?? undefined, href, dueAt:task.due_at });
+      } else if (days <= prefs.taskHorizonDays) {
+        pushCandidate(actions, { id:`task-${task.id}`, kind:"task", score:70 + bonus - Math.min(days, 20), badge:"期限接近", tone:"blue", title:task.title, reason:`${days}日以内に期限が来ます`, companyName, projectName, projectId:task.project_id ?? undefined, href, dueAt:task.due_at });
       }
     }
   }
@@ -162,8 +163,8 @@ export async function getActionCenterSnapshot(): Promise<ActionCenterSnapshot> {
         pushCandidate(actions, { id:`next-${project.id}`, kind:"project", score:92 + Math.min(Math.abs(days), 8) + bonus, badge:"次回アクション超過", tone:"red", title:project.next_action, reason:`「${project.name}」の次回アクション期限を過ぎています`, companyName, projectName:project.name, projectId:project.id, href, dueAt:project.next_action_due });
       } else if (days <= 1) {
         pushCandidate(actions, { id:`next-${project.id}`, kind:"project", score:84 + bonus, badge:"次回アクション", tone:"blue", title:project.next_action, reason:`「${project.name}」で今日〜24時間以内に対応予定です`, companyName, projectName:project.name, projectId:project.id, href, dueAt:project.next_action_due });
-      } else if (days <= 7) {
-        pushCandidate(actions, { id:`next-${project.id}`, kind:"project", score:66 + bonus - days, badge:"今週アクション", tone:"blue", title:project.next_action, reason:`「${project.name}」の次回アクションが${days}日以内です`, companyName, projectName:project.name, projectId:project.id, href, dueAt:project.next_action_due });
+      } else if (days <= prefs.taskHorizonDays) {
+        pushCandidate(actions, { id:`next-${project.id}`, kind:"project", score:66 + bonus - Math.min(days, 20), badge:"次回アクション", tone:"blue", title:project.next_action, reason:`「${project.name}」の次回アクションが${days}日以内です`, companyName, projectName:project.name, projectId:project.id, href, dueAt:project.next_action_due });
       }
     } else if (!project.next_action && ["hearing","preparing","proposed","considering","ordered","in_progress"].includes(project.status)) {
       pushCandidate(actions, { id:`nonext-${project.id}`, kind:"project", score:48 + bonus, badge:"次回未設定", tone:"neutral", title:`${project.name}の次の一手を決める`, reason:"進行中ですが次回アクションが設定されていません", companyName, projectName:project.name, projectId:project.id, href });
@@ -172,23 +173,23 @@ export async function getActionCenterSnapshot(): Promise<ActionCenterSnapshot> {
     if (project.due_date) {
       const due = new Date(`${project.due_date}T23:59:59+09:00`).toISOString();
       const days = daysUntil(due, now);
-      if (days >= 0 && days <= 7) {
-        pushCandidate(actions, { id:`due-${project.id}`, kind:"project", score:64 + bonus - days, badge:"納期接近", tone:"orange", title:`${project.name}の納期確認`, reason:`案件納期まで${days}日です`, companyName, projectName:project.name, projectId:project.id, href, dueAt:due });
+      if (days >= 0 && days <= prefs.projectDueHorizonDays) {
+        pushCandidate(actions, { id:`due-${project.id}`, kind:"project", score:64 + bonus - Math.min(days, 20), badge:"納期接近", tone:"orange", title:`${project.name}の納期確認`, reason:`案件納期まで${days}日です`, companyName, projectName:project.name, projectId:project.id, href, dueAt:due });
       }
     }
 
     if (new Date(project.created_at).getTime() < new Date(staleCutoffIso).getTime() && !activeRecently.has(project.id)) {
-      pushCandidate(actions, { id:`stale-${project.id}`, kind:"project", score:44 + bonus, badge:"14日活動なし", tone:"orange", title:`${project.name}の状況を確認`, reason:"14日以上、活動履歴が記録されていません", companyName, projectName:project.name, projectId:project.id, href });
+      pushCandidate(actions, { id:`stale-${project.id}`, kind:"project", score:44 + bonus, badge:`${prefs.staleProjectDays}日活動なし`, tone:"orange", title:`${project.name}の状況を確認`, reason:`${prefs.staleProjectDays}日以上、活動履歴が記録されていません`, companyName, projectName:project.name, projectId:project.id, href });
     }
   }
 
   type ScheduleRow = { id:string;title:string;start_at:string;project_id:string|null;companies:{name:string}|null;projects:{name:string}|null };
   for (const schedule of (scheduleResult.data ?? []) as unknown as ScheduleRow[]) {
     const hours = (new Date(schedule.start_at).getTime() - now) / (60 * 60 * 1000);
-    const score = hours <= 24 ? 83 : hours <= 72 ? 72 : 58;
+    const score = hours <= 24 ? 83 : hours <= 72 ? 72 : 60;
     pushCandidate(actions, {
       id:`schedule-${schedule.id}`, kind:"schedule", score, badge:"予定準備", tone:"blue",
-      title:`${schedule.title}の準備`, reason:hours <= 24 ? "24時間以内に予定があります" : hours <= 72 ? "3日以内に予定があります" : "今週の予定です",
+      title:`${schedule.title}の準備`, reason:hours <= 24 ? "24時間以内に予定があります" : hours <= 72 ? "3日以内に予定があります" : `${prefs.scheduleHorizonDays}日以内の予定です`,
       companyName:schedule.companies?.name ?? undefined, projectName:schedule.projects?.name ?? undefined, projectId:schedule.project_id ?? undefined,
       href:schedule.project_id ? `/projects/${schedule.project_id}?tab=schedule` : "/schedule", dueAt:schedule.start_at
     });

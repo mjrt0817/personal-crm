@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { companies as demoCompanies, projects as demoProjects, schedules as demoSchedules, tasks as demoTasks } from "@/lib/mock-data";
 import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail } from "@/lib/types";
+import { getActionPreferences } from "@/lib/preferences";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
@@ -207,7 +208,7 @@ export async function getProjectHeader(id: string): Promise<ProjectHeader | null
 export async function getProject(id: string): Promise<Project | null> {
   if (demoMode) return demoProjects.find((p) => p.id === id) ?? null;
 
-  const supabase = await createClient();
+  const [supabase, prefs] = await Promise.all([createClient(), getActionPreferences()]);
   const now = new Date().toISOString();
 
   const [baseResult, linksResult, activitiesResult, tasksResult, schedulesResult] = await Promise.all([
@@ -247,7 +248,7 @@ export async function getProject(id: string): Promise<Project | null> {
     const waitingDays = waitingSinceMs ? Math.max(0, Math.floor((taskNow - waitingSinceMs) / (24 * 60 * 60 * 1000))) : undefined;
     const followUpCandidate = t.status === "waiting" && (
       (t.follow_up_at ? new Date(t.follow_up_at).getTime() <= taskNow : false) ||
-      (!t.follow_up_at && waitingSinceMs !== null && taskNow - waitingSinceMs >= 3 * 24 * 60 * 60 * 1000)
+      (!t.follow_up_at && waitingSinceMs !== null && taskNow - waitingSinceMs >= prefs.waitingFollowupDays * 24 * 60 * 60 * 1000)
     );
     return {
       id: t.id, title: t.title, projectId: project.id, projectName: project.name, companyName: project.companyName,
@@ -366,7 +367,7 @@ export async function getScheduleDetail(id: string): Promise<ScheduleDetail | nu
 
 export async function getTasks(): Promise<Task[]> {
   if (demoMode) return demoTasks;
-  const supabase = await createClient();
+  const [supabase, prefs] = await Promise.all([createClient(), getActionPreferences()]);
   const { data, error } = await supabase
     .from("tasks")
     .select("id,title,status,priority,due_at,waiting_since,follow_up_at,project_id,projects(name,companies(name))")
@@ -378,7 +379,7 @@ export async function getTasks(): Promise<Task[]> {
     projects:{name:string;companies:{name:string}|null}|null
   };
   const now = Date.now();
-  const followupMs = 3 * 24 * 60 * 60 * 1000;
+  const followupMs = prefs.waitingFollowupDays * 24 * 60 * 60 * 1000;
   return ((data ?? []) as unknown as RawTask[]).map((t) => {
     const waitingSinceMs = t.waiting_since ? new Date(t.waiting_since).getTime() : null;
     const waitingDays = waitingSinceMs ? Math.max(0, Math.floor((now - waitingSinceMs) / (24 * 60 * 60 * 1000))) : undefined;
@@ -630,13 +631,13 @@ export async function getDashboardSnapshot() {
     };
   }
 
-  const supabase = await createClient();
+  const [supabase, prefs] = await Promise.all([createClient(), getActionPreferences()]);
   const now = Date.now();
   const jstNow = new Date(now + 9 * 60 * 60 * 1000);
   const date = jstNow.toISOString().slice(0, 10);
   const todayStart = new Date(`${date}T00:00:00+09:00`).toISOString();
   const tomorrowStart = new Date(new Date(`${date}T00:00:00+09:00`).getTime() + 24 * 60 * 60 * 1000).toISOString();
-  const staleCutoff = new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const staleCutoff = new Date(now - prefs.staleProjectDays * 24 * 60 * 60 * 1000).toISOString();
   const activeStatuses: Project["status"][] = ["consultation", "hearing", "preparing", "proposed", "considering", "ordered", "in_progress", "on_hold"];
 
   const [scheduleResult, taskResult, projectResult, activityResult, driveResult] = await Promise.all([
@@ -719,7 +720,7 @@ export async function getDashboardSnapshot() {
   const waitingFollowupAll = tasks.filter((t) => {
     if (t.status !== "waiting" || !t.waitingSince) return false;
     if (t.followUpAt) return new Date(t.followUpAt).getTime() <= now;
-    return now - new Date(t.waitingSince).getTime() >= 3 * 24 * 60 * 60 * 1000;
+    return now - new Date(t.waitingSince).getTime() >= prefs.waitingFollowupDays * 24 * 60 * 60 * 1000;
   }).map((t) => ({ ...t, waitingDays: Math.max(0, Math.floor((now - new Date(t.waitingSince!).getTime()) / (24 * 60 * 60 * 1000))) }));
   const waitingFollowupTasks = waitingFollowupAll.slice(0, 6);
   const staleProjects = projects.filter((p) => new Date(p.createdAt) < new Date(staleCutoff) && !recentlyActive.has(p.id)).slice(0, 6);

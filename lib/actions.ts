@@ -828,3 +828,30 @@ export async function createTaskFromGmail(formData: FormData) {
   redirect(`/projects/${projectId}?tab=activities&gmail=task_added`);
 }
 
+
+function intInRange(formData: FormData, name: string, fallback: number, min: number, max: number) {
+  const parsed = Number(text(formData, name));
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(parsed)));
+}
+
+export async function saveActionPreferences(formData: FormData) {
+  if (demoMode) demoReturn(formData, "/settings");
+  const { supabase, userId } = await authed();
+  const payload = {
+    user_id: userId,
+    waiting_followup_days: intInRange(formData, "waiting_followup_days", 3, 1, 30),
+    stale_project_days: intInRange(formData, "stale_project_days", 14, 3, 90),
+    task_horizon_days: intInRange(formData, "task_horizon_days", 7, 1, 30),
+    schedule_horizon_days: intInRange(formData, "schedule_horizon_days", 7, 1, 30),
+    project_due_horizon_days: intInRange(formData, "project_due_horizon_days", 7, 1, 30),
+    gmail_lookback_days: intInRange(formData, "gmail_lookback_days", 7, 1, 30),
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("user_preferences").upsert(payload, { onConflict: "user_id" });
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+  revalidatePath("/focus");
+  revalidatePath("/dashboard");
+  redirect("/settings?action_rules=saved");
+}

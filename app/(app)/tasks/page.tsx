@@ -47,7 +47,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
               {t.status === "waiting" && <div className="task-wait-meta">
                 <span className={`badge ${t.followUpCandidate ? "red" : "orange"}`}>待ち {t.waitingDays ?? 0}日</span>
                 {t.followUpAt && <span className="small muted">フォロー予定：{fmt(t.followUpAt)}</span>}
-                {!t.followUpAt && <span className="small muted">3日経過でフォロー候補</span>}
+                {!t.followUpAt && <span className="small muted">設定日数経過でフォロー候補</span>}
               </div>}
             </div>
             <span className={`badge ${t.status === "waiting" ? "orange" : t.status === "completed" ? "green" : ""}`}>{statusName[t.status]}</span>

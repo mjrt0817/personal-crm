@@ -3,6 +3,7 @@ import MetricCard from "@/components/MetricCard";
 import StatusBadge from "@/components/StatusBadge";
 import { markTaskFollowedUp } from "@/lib/actions";
 import { getDashboardSnapshot, getGoogleCalendarConnectionStatus } from "@/lib/data";
+import { getActionPreferences } from "@/lib/preferences";
 
 function formatDateTime(value?: string) {
   if (!value) return "未同期";
@@ -15,7 +16,7 @@ function dueLabel(value?: string | null) {
 }
 
 export default async function DashboardPage() {
-  const [snapshot, calendar] = await Promise.all([getDashboardSnapshot(), getGoogleCalendarConnectionStatus()]);
+  const [snapshot, calendar, prefs] = await Promise.all([getDashboardSnapshot(), getGoogleCalendarConnectionStatus(), getActionPreferences()]);
 
   return (
     <>
@@ -39,7 +40,7 @@ export default async function DashboardPage() {
         <MetricCard label="今日の予定" value={snapshot.todayScheduleCount} note="Google連携含む"/>
         <MetricCard label="未完了タスク" value={snapshot.unfinishedTaskCount} note="全案件"/>
         <MetricCard label="期限超過" value={snapshot.overdueTaskCount} note="要対応"/>
-        <MetricCard label="回答待ちフォロー" value={snapshot.waitingFollowupCount} note="3日以上・指定日到来"/>
+        <MetricCard label="回答待ちフォロー" value={snapshot.waitingFollowupCount} note={`${prefs.waitingFollowupDays}日以上・指定日到来`}/>
       </div>
 
       <section className="card focus-callout">
@@ -87,7 +88,7 @@ export default async function DashboardPage() {
             ))}
             {snapshot.staleProjects.map((p) => (
               <Link className="list-row" href={`/projects/${p.id}`} key={`stale-${p.id}`}>
-                <span className="badge orange">14日活動なし</span>
+                <span className="badge orange">{prefs.staleProjectDays}日活動なし</span>
                 <div className="grow"><div className="list-title">{p.name}</div><div className="small muted">{p.companyName} ・ 次：{p.nextAction ?? "未設定"}</div></div>
               </Link>
             ))}

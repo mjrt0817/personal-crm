@@ -21,7 +21,7 @@ export default async function FocusPage({ searchParams }: { searchParams: Promis
         <h1>優先アクション</h1>
         <p className="muted">タスク・回答待ち・案件・予定・Gmailを横断し、「次に何をするか」を自動整理します。</p>
       </div>
-      <Link href="/tasks/new" className="button primary">＋ タスク</Link>
+      <div className="row-actions"><Link href="/settings#action-rules" className="button">判定条件</Link><Link href="/assistant" className="button soft">🤖 AIで整理</Link><Link href="/tasks/new" className="button primary">＋ タスク</Link></div>
     </div>
 
     <div className="grid-4 action-metrics">
@@ -45,6 +45,6 @@ export default async function FocusPage({ searchParams }: { searchParams: Promis
       </div>
     </section>
 
-    <div className="action-logic-note small muted">※ AIによる推測ではなく、登録済みの期限・優先度・活動履歴・予定・Gmail状態をもとにしたルールベースの優先順位です。</div>
+    <div className="action-logic-note small muted">※ この一覧自体はAI推測ではなく、登録済みの期限・優先度・活動履歴・予定・Gmail状態をもとにしたルールベースです。判定条件は設定画面から変更できます。</div>
   </>;
 }
