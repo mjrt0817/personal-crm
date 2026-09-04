@@ -997,6 +997,7 @@ async function allocateInvoiceReference(supabase: Awaited<ReturnType<typeof crea
     if (error) throw new Error(error.message);
     settings = data as any;
   }
+  if (!settings) throw new Error("請求書設定を取得できませんでした。");
   const prefix = String(settings.invoice_prefix || "INV").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 20) || "INV";
   const next = Math.max(1, Number(settings.next_invoice_number || 1));
   const date = todayJstDate().replaceAll("-", "").slice(0, 6);
