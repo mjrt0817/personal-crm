@@ -33,42 +33,63 @@ export default async function ProjectDetailPage({
   const remainingRevenue = Math.max(0, expectedRevenue - realizedRevenue);
 
   const overview = (
-    <section className="card">
-      <div className="card-head"><h2>概要</h2><Link className="small muted" href={`/projects/${id}/edit`}>編集</Link></div>
-      <div className="card-body">
-        <div className="kv"><div className="k">取引先</div><div>{project.companyName}</div></div>
-        <div className="kv"><div className="k">主担当</div><div>{project.contactName ?? "—"}</div></div>
-        <div className="kv"><div className="k">開始日</div><div>{project.startDate ?? "—"}</div></div>
-        <div className="kv"><div className="k">納期</div><div>{project.dueDate ?? "—"}</div></div>
-        {project.pricingModel === "unit" ? (
-          <>
-            <div className="kv"><div className="k">金額方式</div><div>単価 × {project.unitLabel ?? "回"}</div></div>
-            <div className="kv"><div className="k">単価</div><div>{(project.unitPrice ?? 0).toLocaleString()}円 / {project.unitLabel ?? "回"}</div></div>
-            <div className="kv"><div className="k">予定売上</div><div><strong>{expectedRevenue.toLocaleString()}円</strong></div></div>
-            <div className="kv"><div className="k">実施済み売上</div><div><strong>{realizedRevenue.toLocaleString()}円</strong></div></div>
-            <div className="kv"><div className="k">残り見込</div><div>{remainingRevenue.toLocaleString()}円</div></div>
-            <div className="unit-progress-card">
-              <div>
-                <div className="small muted">実施回数</div>
-                <div className="unit-progress-value"><strong>{project.completedUnits ?? 0}</strong> / {project.plannedUnits ?? 0} {project.unitLabel ?? "回"}</div>
+    <>
+      <section className="card">
+        <div className="card-head"><h2>案件概要</h2><Link className="small muted" href={`/projects/${id}/edit`}>編集</Link></div>
+        <div className="card-body">
+          <div className="kv"><div className="k">取引先</div><div>{project.companyName}</div></div>
+          <div className="kv"><div className="k">主担当</div><div>{project.contactName ?? "—"}</div></div>
+          <div className="kv"><div className="k">開始日</div><div>{project.startDate ?? "—"}</div></div>
+          <div className="kv"><div className="k">納期</div><div>{project.dueDate ?? "—"}</div></div>
+          {project.pricingModel === "unit" ? (
+            <>
+              <div className="kv"><div className="k">金額方式</div><div>単価 × {project.unitLabel ?? "回"}</div></div>
+              <div className="kv"><div className="k">単価</div><div>{(project.unitPrice ?? 0).toLocaleString()}円 / {project.unitLabel ?? "回"}</div></div>
+              <div className="kv"><div className="k">予定売上</div><div><strong>{expectedRevenue.toLocaleString()}円</strong></div></div>
+              <div className="kv"><div className="k">実施済み売上</div><div><strong>{realizedRevenue.toLocaleString()}円</strong></div></div>
+              <div className="kv"><div className="k">残り見込</div><div>{remainingRevenue.toLocaleString()}円</div></div>
+              <div className="unit-progress-card">
+                <div><div className="small muted">実施回数</div><div className="unit-progress-value"><strong>{project.completedUnits ?? 0}</strong> / {project.plannedUnits ?? 0} {project.unitLabel ?? "回"}</div></div>
+                <div className="unit-stepper">
+                  <form action={adjustProjectCompletedUnits}><input type="hidden" name="id" value={id}/><input type="hidden" name="delta" value="-1"/><button className="button" disabled={(project.completedUnits ?? 0) <= 0}>−1</button></form>
+                  <form action={adjustProjectCompletedUnits}><input type="hidden" name="id" value={id}/><input type="hidden" name="delta" value="1"/><button className="button primary">＋1 実施</button></form>
+                </div>
               </div>
-              <div className="unit-stepper">
-                <form action={adjustProjectCompletedUnits}><input type="hidden" name="id" value={id}/><input type="hidden" name="delta" value="-1"/><button className="button" disabled={(project.completedUnits ?? 0) <= 0}>−1</button></form>
-                <form action={adjustProjectCompletedUnits}><input type="hidden" name="id" value={id}/><input type="hidden" name="delta" value="1"/><button className="button primary">＋1 実施</button></form>
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="kv"><div className="k">見込金額</div><div>{project.expectedAmount != null ? `${project.expectedAmount.toLocaleString()}円` : "—"}</div></div>
-            <div className="kv"><div className="k">受注金額</div><div>{project.orderAmount != null ? `${project.orderAmount.toLocaleString()}円` : "—"}</div></div>
-          </>
-        )}
-        <div className="kv"><div className="k">受注確度</div><div>{project.winProbability != null ? `${project.winProbability}%` : "ステータス標準値"}</div></div>
-        <div className="kv"><div className="k">受注見込日</div><div>{project.expectedCloseDate ?? "—"}</div></div>
-        <div style={{ marginTop: 16 }}><div className="small muted">案件概要</div><p style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{project.description || "—"}</p></div>
+            </>
+          ) : (
+            <>
+              <div className="kv"><div className="k">見込金額</div><div>{project.expectedAmount != null ? `${project.expectedAmount.toLocaleString()}円` : "—"}</div></div>
+              <div className="kv"><div className="k">受注金額</div><div>{project.orderAmount != null ? `${project.orderAmount.toLocaleString()}円` : "—"}</div></div>
+            </>
+          )}
+          <div className="kv"><div className="k">受注確度</div><div>{project.winProbability != null ? `${project.winProbability}%` : "ステータス標準値"}</div></div>
+          <div className="kv"><div className="k">受注見込日</div><div>{project.expectedCloseDate ?? "—"}</div></div>
+          <div style={{ marginTop: 16 }}><div className="small muted">案件概要</div><p style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{project.description || "—"}</p></div>
+        </div>
+      </section>
+
+      <div className="project-overview-grid">
+        <section className="card project-estimate-summary">
+          <div className="card-head"><div><h2>見積</h2><div className="small muted">この案件に紐付く見積書</div></div><div className="row-actions"><Link href={`/estimates/new?project_id=${id}`} className="button soft">＋ 見積</Link><Link href="/estimates" className="button">一覧 →</Link></div></div>
+          <div className="card-body">
+            {estimates.length ? <div className="project-estimate-list">{estimates.slice(0,3).map((estimate)=><Link key={estimate.id} href={`/estimates/${estimate.id}`} className="project-estimate-row"><div><strong>{estimate.estimateNo}</strong><div className="small muted">{estimate.title}</div></div><span className={`badge estimate-status-${estimate.status}`}>{estimate.status === "accepted" ? "採用" : estimate.status === "sent" ? "送付済" : estimate.status === "draft" ? "下書き" : estimate.status === "rejected" ? "不採用" : "期限切れ"}</span><strong className="money-value">{estimate.totalAmount.toLocaleString("ja-JP")}円</strong></Link>)}</div> : <div className="empty compact-empty">この案件に紐付く見積はまだありません。</div>}
+          </div>
+        </section>
+
+        <section className="card project-billing-summary">
+          <div className="card-head"><div><h2>請求・入金</h2><div className="small muted">請求から入金まで</div></div><div className="row-actions"><Link href={`/projects/${id}/billing/new`} className="button soft">＋ 請求</Link><Link href={`/projects/${id}/billing`} className="button">詳細 →</Link></div></div>
+          <div className="card-body billing-mini-grid">
+            <div className="billing-mini"><span>請求前</span><strong>{(billing.plannedAmount + billing.suggestedAmount).toLocaleString("ja-JP")}円</strong></div>
+            <div className="billing-mini"><span>請求済</span><strong>{billing.issuedAmount.toLocaleString("ja-JP")}円</strong></div>
+            <div className={`billing-mini ${billing.overdueAmount > 0 ? "is-danger" : ""}`}><span>未入金</span><strong>{billing.outstandingAmount.toLocaleString("ja-JP")}円</strong>{billing.overdueAmount > 0 && <small>うち超過 {billing.overdueAmount.toLocaleString("ja-JP")}円</small>}</div>
+            <div className="billing-mini"><span>入金済</span><strong>{billing.paidAmount.toLocaleString("ja-JP")}円</strong></div>
+          </div>
+          {billing.suggestedAmount > 0 && <div className="billing-project-hint">未割当の請求候補：{project.pricingModel === "unit" && billing.suggestedUnits != null ? `${billing.suggestedUnits}${project.unitLabel ?? "回"} / ` : ""}<strong>{billing.suggestedAmount.toLocaleString("ja-JP")}円</strong></div>}
+        </section>
       </div>
-    </section>
+
+      <ProjectAiSummary projectId={id} configured={ai.configured}/>
+    </>
   );
 
   const activities = (
@@ -200,25 +221,17 @@ export default async function ProjectDetailPage({
         <QuickLinks links={project.links}/>
       </section>
 
-      <section className="card project-estimate-summary">
-        <div className="card-head"><div><h2>見積</h2><div className="small muted">この案件に紐付く見積書</div></div><div className="row-actions"><Link href={`/estimates/new?project_id=${id}`} className="button soft">＋ 見積作成</Link><Link href={`/estimates`} className="button">一覧 →</Link></div></div>
-        <div className="card-body">
-          {estimates.length ? <div className="project-estimate-list">{estimates.slice(0,3).map((estimate)=><Link key={estimate.id} href={`/estimates/${estimate.id}`} className="project-estimate-row"><div><strong>{estimate.estimateNo}</strong><div className="small muted">{estimate.title}</div></div><span className={`badge estimate-status-${estimate.status}`}>{estimate.status === "accepted" ? "採用" : estimate.status === "sent" ? "送付済" : estimate.status === "draft" ? "下書き" : estimate.status === "rejected" ? "不採用" : "期限切れ"}</span><strong className="money-value">{estimate.totalAmount.toLocaleString("ja-JP")}円</strong></Link>)}</div> : <div className="empty compact-empty">この案件に紐付く見積はまだありません。</div>}
+      <div className="project-command-bar" aria-label="案件のクイック操作">
+        <div className="project-command-main">
+          <Link className="button primary" href={`/projects/${id}/activities/new`}>＋ 活動を記録</Link>
+          <Link className="button" href={`/projects/${id}/tasks/new`}>＋ タスク</Link>
+          <Link className="button" href={`/projects/${id}/schedule/new`}>＋ 予定</Link>
         </div>
-      </section>
-
-      <section className="card project-billing-summary">
-        <div className="card-head"><div><h2>請求・入金</h2><div className="small muted">案件売上から請求、入金までを追跡</div></div><div className="row-actions"><Link href={`/projects/${id}/billing/new`} className="button soft">＋ 請求予定</Link><Link href={`/projects/${id}/billing`} className="button">詳細 →</Link></div></div>
-        <div className="card-body billing-mini-grid">
-          <div className="billing-mini"><span>請求前</span><strong>{(billing.plannedAmount + billing.suggestedAmount).toLocaleString("ja-JP")}円</strong></div>
-          <div className="billing-mini"><span>請求済</span><strong>{billing.issuedAmount.toLocaleString("ja-JP")}円</strong></div>
-          <div className={`billing-mini ${billing.overdueAmount > 0 ? "is-danger" : ""}`}><span>未入金</span><strong>{billing.outstandingAmount.toLocaleString("ja-JP")}円</strong>{billing.overdueAmount > 0 && <small>うち超過 {billing.overdueAmount.toLocaleString("ja-JP")}円</small>}</div>
-          <div className="billing-mini"><span>入金済</span><strong>{billing.paidAmount.toLocaleString("ja-JP")}円</strong></div>
+        <div className="project-command-sub">
+          <Link className="button soft" href={`/estimates/new?project_id=${id}`}>＋ 見積</Link>
+          <Link className="button soft" href={`/projects/${id}/billing/new`}>＋ 請求予定</Link>
         </div>
-        {billing.suggestedAmount > 0 && <div className="billing-project-hint">未割当の請求候補：{project.pricingModel === "unit" && billing.suggestedUnits != null ? `${billing.suggestedUnits}${project.unitLabel ?? "回"} / ` : ""}<strong>{billing.suggestedAmount.toLocaleString("ja-JP")}円</strong></div>}
-      </section>
-
-      <ProjectAiSummary projectId={id} configured={ai.configured}/>
+      </div>
 
       <ProjectDetailTabs
         initialTab={initialTab}
