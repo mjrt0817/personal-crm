@@ -9,7 +9,7 @@ export type ActionTone = "red" | "orange" | "blue" | "green" | "neutral";
 
 export type ActionCandidate = {
   id: string;
-  kind: "task" | "followup" | "project" | "schedule" | "gmail";
+  kind: "task" | "followup" | "project" | "schedule" | "gmail" | "billing";
   bucket: ActionBucket;
   score: number;
   badge: string;
@@ -77,7 +77,7 @@ export async function getActionCenterSnapshot(): Promise<ActionCenterSnapshot> {
   const gmailCutoffIso = new Date(now - prefs.gmailLookbackDays * DAY).toISOString();
   const staleCutoffIso = new Date(now - prefs.staleProjectDays * DAY).toISOString();
 
-  const [taskResult, projectResult, scheduleResult, activityResult, gmailResult] = await Promise.all([
+  const [taskResult, projectResult, scheduleResult, activityResult, gmailResult, billingResult] = await Promise.all([
     supabase.from("tasks")
       .select("id,title,status,priority,due_at,waiting_since,follow_up_at,project_id,projects(name,companies(name))")
       .neq("status", "completed")
@@ -105,12 +105,18 @@ export async function getActionCenterSnapshot(): Promise<ActionCenterSnapshot> {
       .is("task_id", null)
       .gte("sent_at", gmailCutoffIso)
       .order("sent_at", { ascending:false })
-      .limit(80)
+      .limit(80),
+    supabase.from("project_invoices")
+      .select("id,project_id,title,amount,due_date,status,projects(name,companies(name))")
+      .eq("status", "invoiced")
+      .not("due_date", "is", null)
+      .limit(120)
   ]);
 
   for (const result of [taskResult, projectResult, scheduleResult, activityResult, gmailResult]) {
     if (result.error) throw new Error(result.error.message);
   }
+  if (billingResult.error && !["42P01","PGRST205"].includes(billingResult.error.code ?? "")) throw new Error(billingResult.error.message);
 
   const actions: ActionCandidate[] = [];
 
@@ -206,6 +212,21 @@ export async function getActionCenterSnapshot(): Promise<ActionCenterSnapshot> {
       companyName:mail.projects?.companies?.name ?? undefined, projectName:mail.projects?.name ?? undefined, projectId:mail.project_id,
       href:`/projects/${mail.project_id}?tab=activities`
     });
+  }
+
+  type BillingRow = { id:string;project_id:string;title:string;amount:number|string;due_date:string|null;status:string;projects:{name:string;companies:{name:string}|null}|null };
+  for (const invoice of (billingResult.data ?? []) as unknown as BillingRow[]) {
+    if (!invoice.due_date) continue;
+    const dueIso = new Date(`${invoice.due_date}T23:59:59+09:00`).toISOString();
+    const days = daysUntil(dueIso, now);
+    const amount = Number(invoice.amount ?? 0).toLocaleString("ja-JP");
+    if (days < 0) {
+      pushCandidate(actions, { id:`billing-${invoice.id}`, kind:"billing", score:108 + Math.min(Math.abs(days),10), badge:"入金期限超過", tone:"red", title:invoice.title, reason:`${amount}円の入金期限を${Math.abs(days)}日過ぎています`, companyName:invoice.projects?.companies?.name ?? undefined, projectName:invoice.projects?.name ?? undefined, projectId:invoice.project_id, href:`/billing?filter=overdue`, dueAt:dueIso });
+    } else if (days <= 1) {
+      pushCandidate(actions, { id:`billing-${invoice.id}`, kind:"billing", score:91, badge:"入金期限", tone:"red", title:invoice.title, reason:`${amount}円の支払期限が今日〜明日です`, companyName:invoice.projects?.companies?.name ?? undefined, projectName:invoice.projects?.name ?? undefined, projectId:invoice.project_id, href:`/billing?filter=invoiced`, dueAt:dueIso });
+    } else if (days <= 7) {
+      pushCandidate(actions, { id:`billing-${invoice.id}`, kind:"billing", score:67-days, badge:"入金確認", tone:"orange", title:invoice.title, reason:`${amount}円の支払期限まで${days}日です`, companyName:invoice.projects?.companies?.name ?? undefined, projectName:invoice.projects?.name ?? undefined, projectId:invoice.project_id, href:`/billing?filter=invoiced`, dueAt:dueIso });
+    }
   }
 
   const deduped = new Map<string, ActionCandidate>();

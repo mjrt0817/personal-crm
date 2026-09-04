@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { companies as demoCompanies, projects as demoProjects, schedules as demoSchedules, tasks as demoTasks } from "@/lib/mock-data";
-import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail, SalesPipelineSnapshot } from "@/lib/types";
+import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail, SalesPipelineSnapshot, ProjectInvoice, ProjectBillingSummary, BillingSnapshot, BillingStatus } from "@/lib/types";
 import { getActionPreferences } from "@/lib/preferences";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
@@ -933,7 +933,7 @@ function monthLabelFromKey(key: string) {
 }
 
 export async function getSalesPipelineSnapshot(): Promise<SalesPipelineSnapshot> {
-  const projects = await getProjects();
+  const [projects, billing] = await Promise.all([getProjects(), getBillingSnapshot()]);
   const openStatuses = new Set<Project["status"]>(["consultation","hearing","preparing","proposed","considering","on_hold"]);
   const wonStatuses = new Set<Project["status"]>(["ordered","in_progress","completed"]);
   const open = projects.filter((p) => openStatuses.has(p.status));
@@ -995,9 +995,180 @@ export async function getSalesPipelineSnapshot(): Promise<SalesPipelineSnapshot>
     wonAmount: wonProjects.reduce((sum,p) => sum + p.calculatedWonAmount, 0),
     realizedAmount: wonProjects.reduce((sum,p) => sum + p.realizedAmount, 0),
     currentMonthWonAmount: wonProjects.filter((p) => (p.orderDate ?? p.startDate)?.slice(0,7) === currentKey).reduce((sum,p) => sum + p.calculatedWonAmount, 0),
+    unbilledAmount: billing.unbilledAmount,
+    billedAmount: billing.issuedAmount,
+    paidAmount: billing.paidAmount,
+    outstandingAmount: billing.outstandingAmount,
+    overdueAmount: billing.overdueAmount,
     stages,
     months,
     opportunities,
     wonProjects
+  };
+}
+
+
+function jstDateKeyNow() {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+function mapInvoiceRow(row: any): ProjectInvoice {
+  const today = jstDateKeyNow();
+  const overdue = row.status === "invoiced" && Boolean(row.due_date) && row.due_date < today;
+  const daysOverdue = overdue ? Math.max(1, Math.floor((new Date(`${today}T00:00:00+09:00`).getTime() - new Date(`${row.due_date}T00:00:00+09:00`).getTime()) / 86400000)) : undefined;
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    projectName: row.projects?.name ?? undefined,
+    companyId: row.company_id,
+    companyName: row.companies?.name ?? row.projects?.companies?.name ?? undefined,
+    title: row.title,
+    status: row.status as BillingStatus,
+    amount: numericOrUndefined(row.amount) ?? 0,
+    unitQuantity: numericOrUndefined(row.unit_quantity),
+    unitPrice: numericOrUndefined(row.unit_price),
+    scheduledInvoiceDate: row.scheduled_invoice_date ?? undefined,
+    invoiceDate: row.invoice_date ?? undefined,
+    dueDate: row.due_date ?? undefined,
+    paidDate: row.paid_date ?? undefined,
+    referenceNo: row.reference_no ?? undefined,
+    memo: row.memo ?? undefined,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
+    overdue,
+    daysOverdue
+  };
+}
+
+export async function getInvoiceDetail(id: string): Promise<ProjectInvoice | null> {
+  if (demoMode) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("project_invoices")
+    .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
+    .eq("id", id)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  return mapInvoiceRow(data);
+}
+
+export async function getProjectBillingSummary(projectId: string): Promise<ProjectBillingSummary> {
+  const project = await getProjectBase(projectId);
+  if (!project) throw new Error("案件が見つかりません。");
+  const projectRevenue = getProjectWonRevenue(project);
+  const billingEligible = ["ordered","in_progress","completed"].includes(project.status);
+  if (demoMode) return {
+    invoices: [], projectRevenue, plannedAmount:0, issuedAmount:0, outstandingAmount:0, paidAmount:0, overdueAmount:0, overdueCount:0,
+    allocatedAmount:0, unallocatedAmount:projectRevenue, suggestedAmount: project.pricingModel === "unit" ? getProjectRealizedRevenue(project) : (billingEligible ? projectRevenue : 0),
+    suggestedUnits: project.pricingModel === "unit" ? (project.completedUnits ?? 0) : undefined, allocatedUnits:0
+  };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("project_invoices")
+    .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    if (["42P01", "PGRST205"].includes(error.code ?? "")) return {
+      invoices: [], projectRevenue, plannedAmount:0, issuedAmount:0, outstandingAmount:0, paidAmount:0, overdueAmount:0, overdueCount:0,
+      allocatedAmount:0, unallocatedAmount:projectRevenue, suggestedAmount: project.pricingModel === "unit" ? getProjectRealizedRevenue(project) : (billingEligible ? projectRevenue : 0),
+      suggestedUnits: project.pricingModel === "unit" ? (project.completedUnits ?? 0) : undefined, allocatedUnits:0
+    };
+    throw new Error(error.message);
+  }
+  const invoices: ProjectInvoice[] = (data ?? []).map((row: any) => mapInvoiceRow(row));
+  const active = invoices.filter((x) => x.status !== "cancelled");
+  const plannedAmount = active.filter((x) => x.status === "planned").reduce((s,x)=>s+x.amount,0);
+  const issuedAmount = active.filter((x) => x.status === "invoiced" || x.status === "paid").reduce((s,x)=>s+x.amount,0);
+  const outstandingAmount = active.filter((x) => x.status === "invoiced").reduce((s,x)=>s+x.amount,0);
+  const paidAmount = active.filter((x) => x.status === "paid").reduce((s,x)=>s+x.amount,0);
+  const overdueRows = active.filter((x) => x.overdue);
+  const overdueAmount = overdueRows.reduce((s,x)=>s+x.amount,0);
+  const allocatedAmount = active.reduce((s,x)=>s+x.amount,0);
+  const allocatedUnits = active.reduce((s,x)=>s+(x.unitQuantity ?? ((project.unitPrice ?? 0) > 0 ? x.amount / (project.unitPrice ?? 1) : 0)),0);
+  const completedUnits = project.completedUnits ?? 0;
+  const suggestedUnits = project.pricingModel === "unit" ? Math.max(0, completedUnits - allocatedUnits) : undefined;
+  const suggestedAmount = project.pricingModel === "unit"
+    ? Math.round((project.unitPrice ?? 0) * (suggestedUnits ?? 0))
+    : (billingEligible ? Math.max(0, projectRevenue - allocatedAmount) : 0);
+  return {
+    invoices, projectRevenue, plannedAmount, issuedAmount, outstandingAmount, paidAmount, overdueAmount, overdueCount: overdueRows.length,
+    allocatedAmount, unallocatedAmount: Math.max(0, projectRevenue - allocatedAmount), suggestedAmount, suggestedUnits, allocatedUnits
+  };
+}
+
+export async function getBillingSnapshot(): Promise<BillingSnapshot> {
+  const empty: BillingSnapshot = {
+    plannedAmount:0, unbilledAmount:0, unbilledReadyAmount:0, unbilledReadyCount:0, unbilledProjects:[],
+    issuedAmount:0, outstandingAmount:0, paidAmount:0, overdueAmount:0, overdueCount:0,
+    dueSoonAmount:0, dueSoonCount:0, invoices:[]
+  };
+  if (demoMode) return empty;
+  const supabase = await createClient();
+  const [invoiceResult, projectResult] = await Promise.all([
+    supabase
+      .from("project_invoices")
+      .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("projects")
+      .select(PROJECT_BASE_SELECT)
+      .eq("is_archived", false)
+      .in("status", ["ordered","in_progress","completed"])
+  ]);
+  if (invoiceResult.error) {
+    if (["42P01", "PGRST205"].includes(invoiceResult.error.code ?? "")) return empty;
+    throw new Error(invoiceResult.error.message);
+  }
+  if (projectResult.error) throw new Error(projectResult.error.message);
+
+  const invoices: ProjectInvoice[] = (invoiceResult.data ?? []).map((row: any) => mapInvoiceRow(row));
+  const active = invoices.filter((x) => x.status !== "cancelled");
+  const projects = ((projectResult.data ?? []) as unknown as RawProject[]).map(mapProject);
+  const allocatedByProject = new Map<string, number>();
+  for (const inv of active) allocatedByProject.set(inv.projectId, (allocatedByProject.get(inv.projectId) ?? 0) + inv.amount);
+  let unbilledReadyAmount = 0;
+  let unbilledReadyCount = 0;
+  const unbilledProjects: BillingSnapshot["unbilledProjects"] = [];
+  for (const project of projects) {
+    const readyRevenue = project.pricingModel === "unit" ? getProjectRealizedRevenue(project) : getProjectWonRevenue(project);
+    const remaining = Math.max(0, readyRevenue - (allocatedByProject.get(project.id) ?? 0));
+    if (remaining > 0) {
+      unbilledReadyAmount += remaining;
+      unbilledReadyCount += 1;
+      const unitPrice = project.unitPrice ?? 0;
+      const allocatedUnits = active.filter((x) => x.projectId === project.id).reduce((sum, x) => sum + (x.unitQuantity ?? ((project.unitPrice ?? 0) > 0 ? x.amount / (project.unitPrice ?? 1) : 0)), 0);
+      const readyUnits = project.pricingModel === "unit" ? Math.max(0, (project.completedUnits ?? 0) - allocatedUnits) : undefined;
+      unbilledProjects.push({ projectId:project.id, projectName:project.name, companyName:project.companyName, amount:remaining, units:readyUnits, unitLabel:project.unitLabel });
+    }
+  }
+  unbilledProjects.sort((a,b) => b.amount - a.amount);
+
+  const plannedAmount = active.filter((x) => x.status === "planned").reduce((sum:number,x:ProjectInvoice)=>sum+x.amount,0);
+  const today = jstDateKeyNow();
+  const soon = new Date(`${today}T00:00:00+09:00`);
+  soon.setDate(soon.getDate()+7);
+  const soonKey = new Intl.DateTimeFormat("sv-SE", { timeZone:"Asia/Tokyo", year:"numeric",month:"2-digit",day:"2-digit" }).format(soon);
+  const dueSoonRows = active.filter((x) => x.status === "invoiced" && x.dueDate && x.dueDate >= today && x.dueDate <= soonKey);
+  const overdueRows = active.filter((x) => x.overdue);
+  return {
+    plannedAmount,
+    unbilledAmount: plannedAmount + unbilledReadyAmount,
+    unbilledReadyAmount,
+    unbilledReadyCount,
+    unbilledProjects,
+    issuedAmount: active.filter((x)=>x.status === "invoiced" || x.status === "paid").reduce((sum:number,x:ProjectInvoice)=>sum+x.amount,0),
+    outstandingAmount: active.filter((x)=>x.status === "invoiced").reduce((sum:number,x:ProjectInvoice)=>sum+x.amount,0),
+    paidAmount: active.filter((x)=>x.status === "paid").reduce((sum:number,x:ProjectInvoice)=>sum+x.amount,0),
+    overdueAmount: overdueRows.reduce((sum:number,x:ProjectInvoice)=>sum+x.amount,0),
+    overdueCount: overdueRows.length,
+    dueSoonAmount: dueSoonRows.reduce((sum:number,x:ProjectInvoice)=>sum+x.amount,0),
+    dueSoonCount: dueSoonRows.length,
+    invoices
   };
 }

@@ -13,6 +13,7 @@ export type ProjectStatus =
 export type Priority = "high" | "medium" | "low";
 export type TaskStatus = "todo" | "doing" | "waiting" | "completed";
 export type PricingModel = "fixed" | "unit";
+export type BillingStatus = "planned" | "invoiced" | "paid" | "cancelled";
 
 export type ProjectLink = {
   id: string;
@@ -266,8 +267,69 @@ export type SalesPipelineSnapshot = {
   wonAmount: number;
   realizedAmount: number;
   currentMonthWonAmount: number;
+  unbilledAmount: number;
+  billedAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  overdueAmount: number;
   stages: PipelineStageSummary[];
   months: PipelineMonthSummary[];
   opportunities: Array<Project & { effectiveProbability: number; weightedAmount: number; calculatedExpectedAmount: number }>;
   wonProjects: Array<Project & { calculatedWonAmount: number; realizedAmount: number; remainingAmount: number }>;
+};
+
+
+export type ProjectInvoice = {
+  id: string;
+  projectId: string;
+  projectName?: string;
+  companyId: string;
+  companyName?: string;
+  title: string;
+  status: BillingStatus;
+  amount: number;
+  unitQuantity?: number;
+  unitPrice?: number;
+  scheduledInvoiceDate?: string;
+  invoiceDate?: string;
+  dueDate?: string;
+  paidDate?: string;
+  referenceNo?: string;
+  memo?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  overdue?: boolean;
+  daysOverdue?: number;
+};
+
+export type ProjectBillingSummary = {
+  invoices: ProjectInvoice[];
+  projectRevenue: number;
+  plannedAmount: number;
+  issuedAmount: number;
+  outstandingAmount: number;
+  paidAmount: number;
+  overdueAmount: number;
+  overdueCount: number;
+  allocatedAmount: number;
+  unallocatedAmount: number;
+  suggestedAmount: number;
+  suggestedUnits?: number;
+  allocatedUnits?: number;
+};
+
+export type BillingSnapshot = {
+  plannedAmount: number;
+  unbilledAmount: number;
+  unbilledReadyAmount: number;
+  unbilledReadyCount: number;
+  unbilledProjects: Array<{ projectId: string; projectName: string; companyName: string; amount: number; units?: number; unitLabel?: string }>;
+  issuedAmount: number;
+  outstandingAmount: number;
+  paidAmount: number;
+  overdueAmount: number;
+  overdueCount: number;
+  dueSoonAmount: number;
+  dueSoonCount: number;
+  invoices: ProjectInvoice[];
 };

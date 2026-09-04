@@ -98,7 +98,11 @@ function invalidateProjectMutation(projectId?: string | null) {
   revalidatePath("/projects");
   revalidatePath("/pipeline");
   revalidatePath("/companies");
-  if (projectId) revalidatePath(`/projects/${projectId}`);
+  if (projectId) {
+    revalidatePath(`/projects/${projectId}`);
+    revalidatePath(`/projects/${projectId}/billing`);
+  }
+  revalidatePath("/billing");
 }
 
 function invalidateTaskMutation(projectId?: string | null) {
@@ -940,4 +944,121 @@ export async function restoreCompany(formData: FormData) {
   revalidatePath("/companies");
   revalidatePath("/dashboard");
   redirect("/archive?restored=company");
+}
+
+function todayJstDate() {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+function invalidateBillingMutation(projectId?: string | null) {
+  revalidatePath("/dashboard");
+  revalidatePath("/billing");
+  revalidatePath("/pipeline");
+  if (projectId) revalidatePath(`/projects/${projectId}`);
+}
+
+export async function createProjectInvoice(formData: FormData) {
+  const projectId = required(formData, "project_id", "案件ID");
+  if (demoMode) demoReturn(formData, `/projects/${projectId}?tab=billing`);
+  const { supabase, userId } = await authed();
+  const { data: project, error: projectError } = await supabase.from("projects").select("company_id").eq("id", projectId).single();
+  if (projectError) throw new Error(projectError.message);
+  const rawStatus = text(formData, "status");
+  const status = ["planned","invoiced","paid","cancelled"].includes(rawStatus) ? rawStatus : "planned";
+  const today = todayJstDate();
+  const amount = numberOrNull(formData, "amount");
+  if (amount == null) throw new Error("請求額は必須です。");
+  const { error } = await supabase.from("project_invoices").insert({
+    user_id: userId,
+    project_id: projectId,
+    company_id: project.company_id,
+    title: required(formData, "title", "請求名"),
+    status,
+    amount,
+    unit_quantity: numberOrNull(formData, "unit_quantity"),
+    unit_price: numberOrNull(formData, "unit_price"),
+    scheduled_invoice_date: optional(formData, "scheduled_invoice_date"),
+    invoice_date: optional(formData, "invoice_date") || (["invoiced","paid"].includes(status) ? today : null),
+    due_date: optional(formData, "due_date"),
+    paid_date: optional(formData, "paid_date") || (status === "paid" ? today : null),
+    reference_no: optional(formData, "reference_no"),
+    memo: optional(formData, "memo")
+  });
+  if (error) throw new Error(error.message);
+  invalidateBillingMutation(projectId);
+  redirect(`/projects/${projectId}?tab=billing`);
+}
+
+export async function updateProjectInvoice(formData: FormData) {
+  const id = required(formData, "id", "請求ID");
+  const projectId = required(formData, "project_id", "案件ID");
+  if (demoMode) demoReturn(formData, `/projects/${projectId}?tab=billing`);
+  const { supabase } = await authed();
+  const rawStatus = text(formData, "status");
+  const status = ["planned","invoiced","paid","cancelled"].includes(rawStatus) ? rawStatus : "planned";
+  const today = todayJstDate();
+  const amount = numberOrNull(formData, "amount");
+  if (amount == null) throw new Error("請求額は必須です。");
+  const { error } = await supabase.from("project_invoices").update({
+    title: required(formData, "title", "請求名"),
+    status,
+    amount,
+    unit_quantity: numberOrNull(formData, "unit_quantity"),
+    unit_price: numberOrNull(formData, "unit_price"),
+    scheduled_invoice_date: optional(formData, "scheduled_invoice_date"),
+    invoice_date: optional(formData, "invoice_date") || (["invoiced","paid"].includes(status) ? today : null),
+    due_date: optional(formData, "due_date"),
+    paid_date: optional(formData, "paid_date") || (status === "paid" ? today : null),
+    reference_no: optional(formData, "reference_no"),
+    memo: optional(formData, "memo")
+  }).eq("id", id).eq("project_id", projectId);
+  if (error) throw new Error(error.message);
+  invalidateBillingMutation(projectId);
+  redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
+}
+
+export async function advanceInvoiceStatus(formData: FormData) {
+  const id = required(formData, "id", "請求ID");
+  const projectId = required(formData, "project_id", "案件ID");
+  if (demoMode) demoReturn(formData, returnTarget(formData, `/projects/${projectId}?tab=billing`));
+  const { supabase } = await authed();
+  const { data, error } = await supabase.from("project_invoices").select("status,invoice_date,paid_date").eq("id", id).single();
+  if (error) throw new Error(error.message);
+  const today = todayJstDate();
+  const update: Record<string, unknown> = {};
+  if (data.status === "planned") {
+    update.status = "invoiced";
+    update.invoice_date = data.invoice_date || today;
+  } else if (data.status === "invoiced") {
+    update.status = "paid";
+    update.paid_date = data.paid_date || today;
+  } else {
+    redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
+  }
+  const { error: updateError } = await supabase.from("project_invoices").update(update).eq("id", id);
+  if (updateError) throw new Error(updateError.message);
+  invalidateBillingMutation(projectId);
+  redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
+}
+
+export async function cancelProjectInvoice(formData: FormData) {
+  const id = required(formData, "id", "請求ID");
+  const projectId = required(formData, "project_id", "案件ID");
+  if (demoMode) demoReturn(formData, returnTarget(formData, `/projects/${projectId}?tab=billing`));
+  const { supabase } = await authed();
+  const { error } = await supabase.from("project_invoices").update({ status: "cancelled" }).eq("id", id).eq("project_id", projectId);
+  if (error) throw new Error(error.message);
+  invalidateBillingMutation(projectId);
+  redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
+}
+
+export async function deleteProjectInvoice(formData: FormData) {
+  const id = required(formData, "id", "請求ID");
+  const projectId = required(formData, "project_id", "案件ID");
+  if (demoMode) demoReturn(formData, returnTarget(formData, `/projects/${projectId}?tab=billing`));
+  const { supabase } = await authed();
+  const { error } = await supabase.from("project_invoices").delete().eq("id", id).eq("project_id", projectId);
+  if (error) throw new Error(error.message);
+  invalidateBillingMutation(projectId);
+  redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
 }
