@@ -327,6 +327,10 @@ export type InvoiceSettings = {
   nextInvoiceNumber: number;
   defaultTaxRate: number;
   paymentNote?: string;
+  estimatePrefix?: string;
+  nextEstimateNumber?: number;
+  defaultEstimateValidDays?: number;
+  estimateNote?: string;
 };
 
 export type InvoicePartySnapshot = {
@@ -383,4 +387,67 @@ export type BillingSnapshot = {
   dueSoonAmount: number;
   dueSoonCount: number;
   invoices: ProjectInvoice[];
+};
+
+export type EstimateStatus = "draft" | "sent" | "accepted" | "rejected" | "expired";
+
+export type EstimateItem = {
+  id?: string;
+  description: string;
+  quantity: number;
+  unit?: string;
+  unitPrice: number;
+  taxRate: number;
+  lineSubtotal: number;
+  taxAmount: number;
+  sortOrder: number;
+};
+
+export type Estimate = {
+  id: string;
+  companyId: string;
+  companyName?: string;
+  contactId?: string;
+  contactName?: string;
+  projectId?: string;
+  projectName?: string;
+  estimateNo: string;
+  title: string;
+  status: EstimateStatus;
+  issueDate: string;
+  validUntil?: string;
+  acceptedDate?: string;
+  billingName?: string;
+  billingPostalCode?: string;
+  billingAddress?: string;
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+  issuerSnapshot?: InvoicePartySnapshot;
+  customerSnapshot?: InvoicePartySnapshot;
+  issuedSnapshotAt?: string;
+  memo?: string;
+  terms?: string;
+  items: EstimateItem[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type EstimateSettings = {
+  estimatePrefix: string;
+  nextEstimateNumber: number;
+  defaultEstimateValidDays: number;
+  estimateNote?: string;
+};
+
+export type EstimateDocumentData = {
+  estimate: Estimate;
+  issuer: InvoicePartySnapshot;
+  customer: InvoicePartySnapshot;
+};
+
+export type EstimateFormOptions = {
+  companies: Array<{ id: string; name: string; postalCode?: string; address?: string }>;
+  contacts: Array<{ id: string; companyId: string; name: string }>;
+  projects: Array<{ id: string; companyId: string; name: string }>;
 };
