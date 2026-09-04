@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>業務管理 Ver.2.8 Prototype</title>
+<title>業務管理 Ver.2.9 Prototype</title>
 <style>
 :root{--bg:#f5f7fa;--surface:#fff;--text:#172033;--muted:#667085;--line:#e6eaf0;--accent:#2457d6;--soft:#edf3ff;--danger:#b42318;--warning:#b54708;--success:#067647;--r:14px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,"Yu Gothic",Meiryo,sans-serif}button,a{font:inherit}button{cursor:pointer}
@@ -25,6 +25,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:13px 14p
       <button class="active" onclick="show('dashboard',this)">🏠 ホーム / 優先アクション</button>
       <button onclick="show('projects',this)">📁 案件</button>
       <button onclick="show('pipeline',this)">📊 売上・見込</button>
+      <button onclick="show('estimates',this)">🧾 見積</button>
       <button onclick="show('billing',this)">💴 請求・入金</button>
       <button onclick="show('tasks',this)">✅ タスク</button>
       <button onclick="show('schedule',this)">📅 スケジュール</button>
@@ -123,6 +124,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:13px 14p
         </tbody></table></div>
       </section>
 
+      <section id="estimates" class="screen"><div class="head"><div><h1>見積</h1><div class="muted">見積書から案件・請求へつなげます。</div></div><button class="btn primary">＋ 見積作成</button></div><div class="metrics"><div class="metric"><div class="small muted">進行中</div><div class="v">2件</div></div><div class="metric"><div class="small muted">採用</div><div class="v">1件</div></div></div><div class="card" style="margin-top:18px"><div class="ch"><h2>見積一覧</h2></div><div class="row"><div class="grow"><div class="title">EST-202609-0001　DXコンシェルジュ支援</div><div class="small muted">有限会社ロジステック ・ 3回 × 41,000円</div></div><b>123,000円</b><button class="btn">見積書</button></div></div></section>
       <section id="billing" class="screen"><div class="head"><div><h1>請求・入金</h1><div class="muted">未請求・未入金・期限超過・入金済を管理します。</div></div></div><div class="metrics"><div class="metric"><div class="small muted">未請求</div><div class="v">41,000円</div></div><div class="metric"><div class="small muted">未入金</div><div class="v">41,000円</div></div><div class="metric"><div class="small muted">期限超過</div><div class="v">0円</div></div><div class="metric"><div class="small muted">入金済</div><div class="v">41,000円</div></div></div><div class="card" style="margin-top:18px"><div class="ch"><h2>請求対象</h2></div><div class="row"><div class="grow"><div class="title">DXコンシェルジュ支援</div><div class="small muted">有限会社ロジステック ・ 1回が請求対象</div></div><b>41,000円</b><button class="btn primary">請求予定を作る</button></div></div></section>
 
       <section id="assistant" class="screen"><div class="head"><div><h1>AI参謀</h1><div class="muted">AI機能は後回しですが、入口は残してあります。</div></div></div><div class="card"><div class="body">必要になった段階で再開します。</div></div></section>

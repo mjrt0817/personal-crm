@@ -6,7 +6,7 @@ import ProjectDetailTabs from "@/components/ProjectDetailTabs";
 import AutoDriveSync from "@/components/AutoDriveSync";
 import ProjectGmailPanel from "@/components/ProjectGmailPanel";
 import { priorityLabel } from "@/lib/mock-data";
-import { getProject, getProjectDriveSummary, getProjectGmailSummary, getProjectExpectedRevenue, getProjectRealizedRevenue, getProjectBillingSummary } from "@/lib/data";
+import { getProject, getProjectDriveSummary, getProjectGmailSummary, getProjectExpectedRevenue, getProjectRealizedRevenue, getProjectBillingSummary, getProjectEstimates } from "@/lib/data";
 import { adjustProjectCompletedUnits, archiveProject, deleteActivity, deleteProjectLink, deleteTask, markTaskFollowedUp, syncProjectDriveFolderNow } from "@/lib/actions";
 import TaskStatusToggle from "@/components/TaskStatusToggle";
 import ProjectAiSummary from "@/components/ProjectAiSummary";
@@ -24,7 +24,7 @@ export default async function ProjectDetailPage({
   const { id } = await params;
   const query = await searchParams;
   const initialTab = query.tab && VALID_TABS.has(query.tab) ? query.tab : "overview";
-  const [project, drive, gmail, billing] = await Promise.all([getProject(id), getProjectDriveSummary(id, 8), getProjectGmailSummary(id, 8), getProjectBillingSummary(id)]);
+  const [project, drive, gmail, billing, estimates] = await Promise.all([getProject(id), getProjectDriveSummary(id, 8), getProjectGmailSummary(id, 8), getProjectBillingSummary(id), getProjectEstimates(id)]);
   const ai = getAiConfigStatus();
   if (!project) notFound();
 
@@ -198,6 +198,13 @@ export default async function ProjectDetailPage({
         <div className="project-top"><div><div className="small muted">{project.companyName}</div><h1 className="project-title">{project.name}</h1><div className="project-meta"><StatusBadge status={project.status}/><span className="badge">優先度：{priorityLabel[project.priority]}</span><span className="badge">{project.category}</span></div></div></div>
         <div className="next-action"><div className="action-box"><div className="label">次回予定</div><div className="value">{project.nextSchedule ?? "未設定"}</div><Link className="small link-text" href={`/projects/${id}/schedule/new`}>＋ 予定を追加</Link></div><div className="action-box"><div className="label">次にやること</div><div className="value">{project.nextAction ?? "未設定"}</div><div className="small muted">期限：{project.nextActionDue ? project.nextActionDue.replace("T", " ") : "—"}</div></div></div>
         <QuickLinks links={project.links}/>
+      </section>
+
+      <section className="card project-estimate-summary">
+        <div className="card-head"><div><h2>見積</h2><div className="small muted">この案件に紐付く見積書</div></div><div className="row-actions"><Link href={`/estimates/new?project_id=${id}`} className="button soft">＋ 見積作成</Link><Link href={`/estimates`} className="button">一覧 →</Link></div></div>
+        <div className="card-body">
+          {estimates.length ? <div className="project-estimate-list">{estimates.slice(0,3).map((estimate)=><Link key={estimate.id} href={`/estimates/${estimate.id}`} className="project-estimate-row"><div><strong>{estimate.estimateNo}</strong><div className="small muted">{estimate.title}</div></div><span className={`badge estimate-status-${estimate.status}`}>{estimate.status === "accepted" ? "採用" : estimate.status === "sent" ? "送付済" : estimate.status === "draft" ? "下書き" : estimate.status === "rejected" ? "不採用" : "期限切れ"}</span><strong className="money-value">{estimate.totalAmount.toLocaleString("ja-JP")}円</strong></Link>)}</div> : <div className="empty compact-empty">この案件に紐付く見積はまだありません。</div>}
+        </div>
       </section>
 
       <section className="card project-billing-summary">

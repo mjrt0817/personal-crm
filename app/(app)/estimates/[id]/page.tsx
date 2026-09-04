@@ -1,0 +1,25 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { acceptEstimateAndApplyProject, createInvoiceFromEstimate, deleteEstimate } from "@/lib/actions";
+import { getEstimateDetail, getEstimateLinkedInvoices } from "@/lib/data";
+
+const labels:Record<string,string>={draft:"下書き",sent:"送付済",accepted:"採用",rejected:"不採用",expired:"期限切れ"};
+function yen(v:number){return `${Math.round(v).toLocaleString("ja-JP")}円`;}
+export default async function EstimateDetailPage({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{accepted?:string}>}){
+  const {id}=await params; const query=await searchParams;
+  const [estimate,invoices]=await Promise.all([getEstimateDetail(id),getEstimateLinkedInvoices(id)]); if(!estimate)notFound();
+  return <>
+    <div className="page-head"><Link href="/estimates" className="small muted">← 見積一覧</Link><div className="top-actions"><Link className="button" href={`/estimates/${id}/edit`}>編集</Link><Link className="button primary" href={`/estimate-documents/${id}`} target="_blank">見積書 / PDF</Link></div></div>
+    {query.accepted&&<div className="notice success-notice">見積を採用として案件へ反映しました。</div>}
+    <section className="project-hero estimate-hero"><div className="project-top"><div><div className="small muted">{estimate.companyName}</div><h1 className="project-title">{estimate.title}</h1><div className="project-meta"><span className={`badge estimate-status-${estimate.status}`}>{labels[estimate.status]}</span><span className="badge">{estimate.estimateNo}</span>{estimate.projectId&&<Link className="badge blue" href={`/projects/${estimate.projectId}`}>案件：{estimate.projectName??"開く"}</Link>}</div></div></div><div className="estimate-hero-total"><span>見積総額</span><strong>{yen(estimate.totalAmount)}</strong></div></section>
+
+    <div className="two-col estimate-detail-grid">
+      <section className="card"><div className="card-head"><h2>見積情報</h2></div><div className="card-body"><div className="kv"><div className="k">見積日</div><div>{estimate.issueDate}</div></div><div className="kv"><div className="k">有効期限</div><div>{estimate.validUntil??"—"}</div></div><div className="kv"><div className="k">担当者</div><div>{estimate.contactName??"—"}</div></div><div className="kv"><div className="k">宛名</div><div>{estimate.billingName??estimate.companyName??"—"}</div></div>{estimate.terms&&<div style={{marginTop:14}}><div className="small muted">見積条件</div><div style={{whiteSpace:"pre-wrap",marginTop:6}}>{estimate.terms}</div></div>}</div></section>
+      <section className="card"><div className="card-head"><h2>案件・請求への引継ぎ</h2></div><div className="card-body estimate-handoff"><p className="muted">採用された見積は、案件の金額・単価情報へそのまま反映できます。</p>{estimate.status!=="accepted"?<form action={acceptEstimateAndApplyProject}><input type="hidden" name="id" value={id}/><button className="button primary">{estimate.projectId?"採用・案件へ反映":"採用・案件化"}</button></form>:<><div className="notice success-notice">採用済み{estimate.projectId?"・案件連携済み":""}</div><div className="row-actions"><form action={acceptEstimateAndApplyProject}><input type="hidden" name="id" value={id}/><button className="button">{estimate.projectId?"案件へ再反映":"案件化"}</button></form>{estimate.projectId&&<Link className="button" href={`/projects/${estimate.projectId}`}>案件を開く</Link>}{estimate.projectId&&invoices.length===0&&<form action={createInvoiceFromEstimate}><input type="hidden" name="id" value={id}/><button className="button primary">見積総額を一括請求予定へ</button></form>}</div></>}{invoices.length>0&&<div className="estimate-linked-invoices"><div className="small muted">この見積から作成した請求</div>{invoices.map((inv)=><Link key={inv.id} href={`/billing/${inv.id}/edit`} className="estimate-linked-invoice"><span>{inv.referenceNo??"請求予定"}</span><strong>{yen(inv.amount)}</strong></Link>)}</div>}</div></section>
+    </div>
+
+    <section className="card" style={{marginTop:18}}><div className="card-head"><h2>明細</h2><span className="badge">{estimate.items.length}件</span></div><div className="table-wrap"><table className="estimate-detail-table"><thead><tr><th>内容</th><th>数量</th><th>単位</th><th>単価</th><th>税率</th><th>金額</th></tr></thead><tbody>{estimate.items.map((item,index)=><tr key={item.id??index}><td>{item.description}</td><td>{item.quantity}</td><td>{item.unit??"—"}</td><td className="money-value">{yen(item.unitPrice)}</td><td>{item.taxRate}%</td><td className="money-value"><strong>{yen(item.lineSubtotal)}</strong></td></tr>)}</tbody></table></div><div className="estimate-summary-box"><div><span>小計</span><strong>{yen(estimate.subtotal)}</strong></div><div><span>消費税</span><strong>{yen(estimate.taxAmount)}</strong></div><div className="grand"><span>合計</span><strong>{yen(estimate.totalAmount)}</strong></div></div></section>
+    {estimate.memo&&<section className="card" style={{marginTop:18}}><div className="card-head"><h2>社内メモ</h2></div><div className="card-body" style={{whiteSpace:"pre-wrap"}}>{estimate.memo}</div></section>}
+    <div className="danger-zone"><form action={deleteEstimate}><input type="hidden" name="id" value={id}/><button className="button danger">見積を削除</button></form></div>
+  </>;
+}

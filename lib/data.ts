@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { companies as demoCompanies, projects as demoProjects, schedules as demoSchedules, tasks as demoTasks } from "@/lib/mock-data";
-import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail, SalesPipelineSnapshot, ProjectInvoice, ProjectBillingSummary, BillingSnapshot, BillingStatus, InvoiceSettings, InvoiceDocumentData, InvoicePartySnapshot } from "@/lib/types";
+import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail, SalesPipelineSnapshot, ProjectInvoice, ProjectBillingSummary, BillingSnapshot, BillingStatus, InvoiceSettings, InvoiceDocumentData, InvoicePartySnapshot, Estimate, EstimateItem, EstimateStatus, EstimateDocumentData, EstimateSettings, EstimateFormOptions } from "@/lib/types";
 import { getActionPreferences } from "@/lib/preferences";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
@@ -1187,13 +1187,16 @@ export async function getInvoiceSettings(): Promise<InvoiceSettings> {
     issuerName: "",
     invoicePrefix: "INV",
     nextInvoiceNumber: 1,
-    defaultTaxRate: 10
+    defaultTaxRate: 10,
+    estimatePrefix: "EST",
+    nextEstimateNumber: 1,
+    defaultEstimateValidDays: 30
   };
   if (demoMode) return defaults;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("invoice_settings")
-    .select("issuer_name,issuer_postal_code,issuer_address,issuer_phone,issuer_email,registration_number,bank_name,bank_branch,bank_account_type,bank_account_number,bank_account_name,invoice_prefix,next_invoice_number,default_tax_rate,payment_note")
+    .select("issuer_name,issuer_postal_code,issuer_address,issuer_phone,issuer_email,registration_number,bank_name,bank_branch,bank_account_type,bank_account_number,bank_account_name,invoice_prefix,next_invoice_number,default_tax_rate,payment_note,estimate_prefix,next_estimate_number,default_estimate_valid_days,estimate_note")
     .maybeSingle();
   if (error) {
     if (["42P01", "PGRST205"].includes(error.code ?? "")) return defaults;
@@ -1215,7 +1218,11 @@ export async function getInvoiceSettings(): Promise<InvoiceSettings> {
     invoicePrefix: data.invoice_prefix ?? "INV",
     nextInvoiceNumber: Number(data.next_invoice_number ?? 1),
     defaultTaxRate: Number(data.default_tax_rate ?? 10),
-    paymentNote: data.payment_note ?? undefined
+    paymentNote: data.payment_note ?? undefined,
+    estimatePrefix: data.estimate_prefix ?? "EST",
+    nextEstimateNumber: Number(data.next_estimate_number ?? 1),
+    defaultEstimateValidDays: Number(data.default_estimate_valid_days ?? 30),
+    estimateNote: data.estimate_note ?? undefined
   };
 }
 
@@ -1255,4 +1262,153 @@ export async function getInvoiceDocumentData(id: string): Promise<InvoiceDocumen
   const taxAmount = rate > 0 ? Math.floor(invoice.amount * rate / (100 + rate)) : 0;
   const subtotal = invoice.amount - taxAmount;
   return { invoice, project, issuer, customer, taxAmount, subtotal };
+}
+
+function mapEstimateItem(row: any): EstimateItem {
+  return {
+    id: row.id,
+    description: row.description ?? "",
+    quantity: Number(row.quantity ?? 0),
+    unit: row.unit ?? undefined,
+    unitPrice: Number(row.unit_price ?? 0),
+    taxRate: Number(row.tax_rate ?? 0),
+    lineSubtotal: Number(row.line_subtotal ?? 0),
+    taxAmount: Number(row.tax_amount ?? 0),
+    sortOrder: Number(row.sort_order ?? 0)
+  };
+}
+
+function mapEstimateRow(row: any, items: EstimateItem[] = []): Estimate {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    companyName: row.companies?.name ?? undefined,
+    contactId: row.contact_id ?? undefined,
+    contactName: row.contacts?.name ?? undefined,
+    projectId: row.project_id ?? undefined,
+    projectName: row.projects?.name ?? undefined,
+    estimateNo: row.estimate_no,
+    title: row.title,
+    status: row.status as EstimateStatus,
+    issueDate: row.issue_date,
+    validUntil: row.valid_until ?? undefined,
+    acceptedDate: row.accepted_date ?? undefined,
+    billingName: row.billing_name ?? undefined,
+    billingPostalCode: row.billing_postal_code ?? undefined,
+    billingAddress: row.billing_address ?? undefined,
+    subtotal: Number(row.subtotal ?? 0),
+    taxAmount: Number(row.tax_amount ?? 0),
+    totalAmount: Number(row.total_amount ?? 0),
+    issuerSnapshot: (row.issuer_snapshot ?? undefined) as InvoicePartySnapshot | undefined,
+    customerSnapshot: (row.customer_snapshot ?? undefined) as InvoicePartySnapshot | undefined,
+    issuedSnapshotAt: row.issued_snapshot_at ?? undefined,
+    memo: row.memo ?? undefined,
+    terms: row.terms ?? undefined,
+    items,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined
+  };
+}
+
+const ESTIMATE_SELECT = `
+  id,company_id,contact_id,project_id,estimate_no,title,status,issue_date,valid_until,accepted_date,billing_name,billing_postal_code,billing_address,subtotal,tax_amount,total_amount,issuer_snapshot,customer_snapshot,issued_snapshot_at,memo,terms,created_at,updated_at,
+  companies(name),contacts(name),projects(name)
+`;
+
+export async function getEstimateSettings(): Promise<EstimateSettings> {
+  const settings = await getInvoiceSettings();
+  return {
+    estimatePrefix: settings.estimatePrefix ?? "EST",
+    nextEstimateNumber: settings.nextEstimateNumber ?? 1,
+    defaultEstimateValidDays: settings.defaultEstimateValidDays ?? 30,
+    estimateNote: settings.estimateNote
+  };
+}
+
+export async function getEstimates(): Promise<Estimate[]> {
+  if (demoMode) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("estimates").select(ESTIMATE_SELECT).order("issue_date", { ascending: false }).order("created_at", { ascending: false });
+  if (error) {
+    if (["42P01", "PGRST205"].includes(error.code ?? "")) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? []).map((row:any) => mapEstimateRow(row));
+}
+
+export async function getEstimateDetail(id: string): Promise<Estimate | null> {
+  if (demoMode) return null;
+  const supabase = await createClient();
+  const [estimateResult, itemsResult] = await Promise.all([
+    supabase.from("estimates").select(ESTIMATE_SELECT).eq("id", id).maybeSingle(),
+    supabase.from("estimate_items").select("id,description,quantity,unit,unit_price,tax_rate,line_subtotal,tax_amount,sort_order").eq("estimate_id", id).order("sort_order", { ascending: true })
+  ]);
+  if (estimateResult.error) throw new Error(estimateResult.error.message);
+  if (itemsResult.error) throw new Error(itemsResult.error.message);
+  if (!estimateResult.data) return null;
+  return mapEstimateRow(estimateResult.data, (itemsResult.data ?? []).map(mapEstimateItem));
+}
+
+export async function getProjectEstimates(projectId: string): Promise<Estimate[]> {
+  if (demoMode) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("estimates").select(ESTIMATE_SELECT).eq("project_id", projectId).order("issue_date", { ascending: false });
+  if (error) {
+    if (["42P01", "PGRST205"].includes(error.code ?? "")) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? []).map((row:any) => mapEstimateRow(row));
+}
+
+export async function getEstimateDocumentData(id: string): Promise<EstimateDocumentData | null> {
+  const estimate = await getEstimateDetail(id);
+  if (!estimate) return null;
+  const [company, settings] = await Promise.all([getCompanyBase(estimate.companyId), getInvoiceSettings()]);
+  const issuer: InvoicePartySnapshot = estimate.issuerSnapshot ?? {
+    name: settings.issuerName,
+    postalCode: settings.issuerPostalCode,
+    address: settings.issuerAddress,
+    phone: settings.issuerPhone,
+    email: settings.issuerEmail,
+    registrationNumber: settings.registrationNumber
+  };
+  const customer: InvoicePartySnapshot = estimate.customerSnapshot ?? {
+    name: estimate.billingName ?? company?.name,
+    postalCode: estimate.billingPostalCode ?? company?.postalCode,
+    address: estimate.billingAddress ?? company?.address
+  };
+  return { estimate, issuer, customer };
+}
+
+export async function getEstimateFormOptions(): Promise<EstimateFormOptions> {
+  if (demoMode) return {
+    companies: demoCompanies.map((c) => ({ id: c.id, name: c.name })),
+    contacts: [],
+    projects: demoProjects.map((p) => ({ id: p.id, companyId: p.companyId ?? "", name: p.name }))
+  };
+  const supabase = await createClient();
+  const [companiesResult, contactsResult, projectsResult] = await Promise.all([
+    supabase.from("companies").select("id,name,postal_code,address").eq("is_archived", false).order("name"),
+    supabase.from("contacts").select("id,company_id,name").order("name"),
+    supabase.from("projects").select("id,company_id,name").eq("is_archived", false).order("updated_at", { ascending:false })
+  ]);
+  if (companiesResult.error) throw new Error(companiesResult.error.message);
+  if (contactsResult.error) throw new Error(contactsResult.error.message);
+  if (projectsResult.error) throw new Error(projectsResult.error.message);
+  return {
+    companies: (companiesResult.data ?? []).map((x:any) => ({ id:x.id, name:x.name, postalCode:x.postal_code ?? undefined, address:x.address ?? undefined })),
+    contacts: (contactsResult.data ?? []).map((x:any) => ({ id:x.id, companyId:x.company_id, name:x.name })),
+    projects: (projectsResult.data ?? []).map((x:any) => ({ id:x.id, companyId:x.company_id, name:x.name }))
+  };
+}
+
+export async function getEstimateLinkedInvoices(estimateId: string): Promise<Array<{id:string;status:BillingStatus;amount:number;referenceNo?:string}>> {
+  if (demoMode) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("project_invoices").select("id,status,amount,reference_no").eq("estimate_id", estimateId).order("created_at", {ascending:false});
+  if (error) {
+    if (["42703","PGRST204"].includes(error.code ?? "")) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? []).map((x:any)=>({id:x.id,status:x.status as BillingStatus,amount:Number(x.amount??0),referenceNo:x.reference_no??undefined}));
 }

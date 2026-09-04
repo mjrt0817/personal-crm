@@ -983,7 +983,7 @@ function invalidateBillingMutation(projectId?: string | null) {
 
 async function getInvoiceSettingsRow(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
   const { data, error } = await supabase.from("invoice_settings")
-    .select("issuer_name,issuer_postal_code,issuer_address,issuer_phone,issuer_email,registration_number,bank_name,bank_branch,bank_account_type,bank_account_number,bank_account_name,invoice_prefix,next_invoice_number,default_tax_rate,payment_note")
+    .select("issuer_name,issuer_postal_code,issuer_address,issuer_phone,issuer_email,registration_number,bank_name,bank_branch,bank_account_type,bank_account_number,bank_account_name,invoice_prefix,next_invoice_number,default_tax_rate,payment_note,estimate_prefix,next_estimate_number,default_estimate_valid_days,estimate_note")
     .eq("user_id", userId)
     .maybeSingle();
   if (error && !["42P01", "PGRST205"].includes(error.code ?? "")) throw new Error(error.message);
@@ -1091,7 +1091,11 @@ export async function saveInvoiceSettings(formData: FormData) {
     invoice_prefix: text(formData, "invoice_prefix") || "INV",
     next_invoice_number: nextNumber,
     default_tax_rate: Math.max(0, Math.min(100, defaultTax)),
-    payment_note: optional(formData, "payment_note")
+    payment_note: optional(formData, "payment_note"),
+    estimate_prefix: text(formData, "estimate_prefix") || "EST",
+    next_estimate_number: Math.max(1, Math.floor(numberOrNull(formData, "next_estimate_number") ?? 1)),
+    default_estimate_valid_days: Math.max(1, Math.min(365, Math.floor(numberOrNull(formData, "default_estimate_valid_days") ?? 30))),
+    estimate_note: optional(formData, "estimate_note")
   };
   const { error } = await supabase.from("invoice_settings").upsert(payload, { onConflict: "user_id" });
   if (error) throw new Error(error.message);
@@ -1229,4 +1233,319 @@ export async function deleteProjectInvoice(formData: FormData) {
   if (error) throw new Error(error.message);
   invalidateBillingMutation(projectId);
   redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
+}
+
+function formValues(formData: FormData, name: string) {
+  return formData.getAll(name).map((v) => typeof v === "string" ? v.trim() : "");
+}
+
+function estimateItemsFromForm(formData: FormData) {
+  const descriptions = formValues(formData, "item_description");
+  const quantities = formValues(formData, "item_quantity");
+  const units = formValues(formData, "item_unit");
+  const unitPrices = formValues(formData, "item_unit_price");
+  const taxRates = formValues(formData, "item_tax_rate");
+  const items = descriptions.map((description, index) => {
+    if (!description) return null;
+    const quantity = Math.max(0, Number(quantities[index] || 0));
+    const unitPrice = Math.max(0, Math.round(Number(unitPrices[index] || 0)));
+    const taxRate = Math.max(0, Math.min(100, Number(taxRates[index] || 0)));
+    const lineSubtotal = Math.round(quantity * unitPrice);
+    const taxAmount = Math.round(lineSubtotal * taxRate / 100);
+    return {
+      description,
+      quantity,
+      unit: units[index] || null,
+      unit_price: unitPrice,
+      tax_rate: taxRate,
+      line_subtotal: lineSubtotal,
+      tax_amount: taxAmount,
+      sort_order: index
+    };
+  }).filter(Boolean) as Array<{description:string;quantity:number;unit:string|null;unit_price:number;tax_rate:number;line_subtotal:number;tax_amount:number;sort_order:number}>;
+  if (!items.length) throw new Error("見積明細を1件以上入力してください。");
+  return items;
+}
+
+async function validateEstimateRelations(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  companyId: string,
+  contactId: string | null,
+  projectId: string | null
+) {
+  const validContact = await validatePrimaryContactForCompany(supabase, companyId, contactId);
+  if (projectId) {
+    const { data, error } = await supabase.from("projects").select("id,company_id").eq("id", projectId).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data || data.company_id !== companyId) throw new Error("見積に紐付ける案件は選択した取引先の案件から選択してください。");
+  }
+  return validContact;
+}
+
+async function allocateEstimateReference(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  let settings = await getInvoiceSettingsRow(supabase, userId);
+  if (!settings) {
+    const { data, error } = await supabase.from("invoice_settings").insert({ user_id: userId }).select("estimate_prefix,next_estimate_number").single();
+    if (error) throw new Error(error.message);
+    settings = data as any;
+  }
+  if (!settings) throw new Error("見積設定を取得できませんでした。");
+  const prefix = String((settings as any).estimate_prefix || "EST").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 20) || "EST";
+  const next = Math.max(1, Number((settings as any).next_estimate_number || 1));
+  const date = todayJstDate().replaceAll("-", "").slice(0, 6);
+  const reference = `${prefix}-${date}-${String(next).padStart(4, "0")}`;
+  const { error } = await supabase.from("invoice_settings").update({ next_estimate_number: next + 1 }).eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  return reference;
+}
+
+async function buildEstimateSnapshots(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  companyId: string,
+  billing: { name?: string | null; postalCode?: string | null; address?: string | null }
+) {
+  const [settings, companyResult] = await Promise.all([
+    getInvoiceSettingsRow(supabase, userId),
+    supabase.from("companies").select("name,postal_code,address,phone,email").eq("id", companyId).single()
+  ]);
+  if (companyResult.error) throw new Error(companyResult.error.message);
+  const company = companyResult.data;
+  return {
+    issuer_snapshot: {
+      name: settings?.issuer_name || "",
+      postalCode: settings?.issuer_postal_code || undefined,
+      address: settings?.issuer_address || undefined,
+      phone: settings?.issuer_phone || undefined,
+      email: settings?.issuer_email || undefined,
+      registrationNumber: settings?.registration_number || undefined
+    },
+    customer_snapshot: {
+      name: billing.name || company.name,
+      postalCode: billing.postalCode || company.postal_code || undefined,
+      address: billing.address || company.address || undefined,
+      phone: company.phone || undefined,
+      email: company.email || undefined
+    },
+    issued_snapshot_at: new Date().toISOString()
+  };
+}
+
+function invalidateEstimateMutation(projectId?: string | null) {
+  revalidatePath("/estimates");
+  revalidatePath("/dashboard");
+  revalidatePath("/pipeline");
+  if (projectId) revalidatePath(`/projects/${projectId}`);
+}
+
+export async function createEstimate(formData: FormData) {
+  if (demoMode) demoReturn(formData, "/estimates");
+  const { supabase, userId } = await authed();
+  const companyId = required(formData, "company_id", "取引先");
+  const projectId = optional(formData, "project_id");
+  const contactId = await validateEstimateRelations(supabase, companyId, optional(formData, "contact_id"), projectId);
+  const items = estimateItemsFromForm(formData);
+  const subtotal = items.reduce((sum, x) => sum + x.line_subtotal, 0);
+  const taxAmount = items.reduce((sum, x) => sum + x.tax_amount, 0);
+  const statusRaw = text(formData, "status");
+  const status = ["draft","sent","accepted","rejected","expired"].includes(statusRaw) ? statusRaw : "draft";
+  const estimateNo = await allocateEstimateReference(supabase, userId);
+  const payload: Record<string, unknown> = {
+    user_id: userId,
+    company_id: companyId,
+    contact_id: contactId,
+    project_id: projectId,
+    estimate_no: estimateNo,
+    title: required(formData, "title", "見積名"),
+    status,
+    issue_date: optional(formData, "issue_date") || todayJstDate(),
+    valid_until: optional(formData, "valid_until"),
+    accepted_date: status === "accepted" ? (optional(formData, "accepted_date") || todayJstDate()) : optional(formData, "accepted_date"),
+    billing_name: optional(formData, "billing_name"),
+    billing_postal_code: optional(formData, "billing_postal_code"),
+    billing_address: optional(formData, "billing_address"),
+    subtotal,
+    tax_amount: taxAmount,
+    total_amount: subtotal + taxAmount,
+    memo: optional(formData, "memo"),
+    terms: optional(formData, "terms")
+  };
+  if (status !== "draft") Object.assign(payload, await buildEstimateSnapshots(supabase, userId, companyId, {
+    name: payload.billing_name as string | null,
+    postalCode: payload.billing_postal_code as string | null,
+    address: payload.billing_address as string | null
+  }));
+  const { data, error } = await supabase.from("estimates").insert(payload).select("id").single();
+  if (error) throw new Error(error.message);
+  const { error: itemError } = await supabase.from("estimate_items").insert(items.map((x) => ({...x, user_id: userId, estimate_id: data.id})));
+  if (itemError) {
+    await supabase.from("estimates").delete().eq("id", data.id);
+    throw new Error(itemError.message);
+  }
+  invalidateEstimateMutation(projectId);
+  redirect(`/estimates/${data.id}`);
+}
+
+export async function updateEstimate(formData: FormData) {
+  const id = required(formData, "id", "見積ID");
+  if (demoMode) demoReturn(formData, `/estimates/${id}`);
+  const { supabase, userId } = await authed();
+  const companyId = required(formData, "company_id", "取引先");
+  const projectId = optional(formData, "project_id");
+  const contactId = await validateEstimateRelations(supabase, companyId, optional(formData, "contact_id"), projectId);
+  const items = estimateItemsFromForm(formData);
+  const subtotal = items.reduce((sum, x) => sum + x.line_subtotal, 0);
+  const taxAmount = items.reduce((sum, x) => sum + x.tax_amount, 0);
+  const statusRaw = text(formData, "status");
+  const status = ["draft","sent","accepted","rejected","expired"].includes(statusRaw) ? statusRaw : "draft";
+  const { data: current, error: currentError } = await supabase.from("estimates").select("issuer_snapshot,customer_snapshot").eq("id", id).single();
+  if (currentError) throw new Error(currentError.message);
+  const payload: Record<string, unknown> = {
+    company_id: companyId,
+    contact_id: contactId,
+    project_id: projectId,
+    title: required(formData, "title", "見積名"),
+    status,
+    issue_date: optional(formData, "issue_date") || todayJstDate(),
+    valid_until: optional(formData, "valid_until"),
+    accepted_date: status === "accepted" ? (optional(formData, "accepted_date") || todayJstDate()) : optional(formData, "accepted_date"),
+    billing_name: optional(formData, "billing_name"),
+    billing_postal_code: optional(formData, "billing_postal_code"),
+    billing_address: optional(formData, "billing_address"),
+    subtotal,
+    tax_amount: taxAmount,
+    total_amount: subtotal + taxAmount,
+    memo: optional(formData, "memo"),
+    terms: optional(formData, "terms")
+  };
+  if (status !== "draft" && (!current.issuer_snapshot || !current.customer_snapshot)) Object.assign(payload, await buildEstimateSnapshots(supabase, userId, companyId, {
+    name: payload.billing_name as string | null,
+    postalCode: payload.billing_postal_code as string | null,
+    address: payload.billing_address as string | null
+  }));
+  const { error } = await supabase.from("estimates").update(payload).eq("id", id);
+  if (error) throw new Error(error.message);
+  const { error: deleteError } = await supabase.from("estimate_items").delete().eq("estimate_id", id);
+  if (deleteError) throw new Error(deleteError.message);
+  const { error: itemError } = await supabase.from("estimate_items").insert(items.map((x) => ({...x, user_id: userId, estimate_id: id})));
+  if (itemError) throw new Error(itemError.message);
+  invalidateEstimateMutation(projectId);
+  redirect(`/estimates/${id}`);
+}
+
+export async function deleteEstimate(formData: FormData) {
+  const id = required(formData, "id", "見積ID");
+  if (demoMode) demoReturn(formData, "/estimates");
+  const { supabase } = await authed();
+  const { data } = await supabase.from("estimates").select("project_id").eq("id", id).maybeSingle();
+  const { error } = await supabase.from("estimates").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  invalidateEstimateMutation(data?.project_id ?? null);
+  redirect("/estimates");
+}
+
+function estimateProjectPricing(items: Array<{description:string;quantity:number;unit:string|null;unit_price:number;tax_rate:number;line_subtotal:number;tax_amount:number}>, total: number, accepted: boolean) {
+  if (items.length === 1 && items[0].quantity > 1 && items[0].unit) {
+    return {
+      pricing_model: "unit",
+      unit_label: items[0].unit,
+      unit_price: items[0].unit_price,
+      planned_units: items[0].quantity,
+      completed_units: 0,
+      expected_amount: null,
+      order_amount: null
+    };
+  }
+  return {
+    pricing_model: "fixed",
+    unit_label: "回",
+    unit_price: null,
+    planned_units: null,
+    completed_units: null,
+    expected_amount: total,
+    order_amount: accepted ? total : null
+  };
+}
+
+export async function acceptEstimateAndApplyProject(formData: FormData) {
+  const id = required(formData, "id", "見積ID");
+  if (demoMode) demoReturn(formData, `/estimates/${id}`);
+  const { supabase, userId } = await authed();
+  const { data: estimate, error } = await supabase.from("estimates").select("id,estimate_no,company_id,contact_id,project_id,title,total_amount,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot").eq("id", id).single();
+  if (error) throw new Error(error.message);
+  const { data: itemRows, error: itemError } = await supabase.from("estimate_items").select("description,quantity,unit,unit_price,tax_rate,line_subtotal,tax_amount").eq("estimate_id", id).order("sort_order");
+  if (itemError) throw new Error(itemError.message);
+  const pricing = estimateProjectPricing(itemRows ?? [], Number(estimate.total_amount ?? 0), true);
+  let projectId = estimate.project_id as string | null;
+  if (projectId) {
+    const { error: updateError } = await supabase.from("projects").update({
+      company_id: estimate.company_id,
+      primary_contact_id: estimate.contact_id,
+      status: "ordered",
+      order_date: todayJstDate(),
+      ...pricing
+    }).eq("id", projectId);
+    if (updateError) throw new Error(updateError.message);
+  } else {
+    const { data: created, error: createError } = await supabase.from("projects").insert({
+      user_id: userId,
+      company_id: estimate.company_id,
+      primary_contact_id: estimate.contact_id,
+      status: "ordered",
+      priority: "medium",
+      order_date: todayJstDate(),
+      description: `見積 ${estimate.estimate_no || id} から案件化`,
+      ...pricing
+    }).select("id").single();
+    if (createError) throw new Error(createError.message);
+    projectId = created.id;
+  }
+  const estimateUpdate: Record<string, unknown> = { status: "accepted", accepted_date: todayJstDate(), project_id: projectId };
+  if (!estimate.issuer_snapshot || !estimate.customer_snapshot) Object.assign(estimateUpdate, await buildEstimateSnapshots(supabase, userId, estimate.company_id, {
+    name: estimate.billing_name,
+    postalCode: estimate.billing_postal_code,
+    address: estimate.billing_address
+  }));
+  const { error: estimateError } = await supabase.from("estimates").update(estimateUpdate).eq("id", id);
+  if (estimateError) throw new Error(estimateError.message);
+  invalidateEstimateMutation(projectId);
+  revalidatePath("/projects");
+  redirect(`/estimates/${id}?accepted=1`);
+}
+
+export async function createInvoiceFromEstimate(formData: FormData) {
+  const id = required(formData, "id", "見積ID");
+  if (demoMode) demoReturn(formData, `/estimates/${id}`);
+  const { supabase, userId } = await authed();
+  const { data: estimate, error } = await supabase.from("estimates").select("id,estimate_no,company_id,project_id,title,total_amount,billing_name,billing_postal_code,billing_address,memo,status").eq("id", id).single();
+  if (error) throw new Error(error.message);
+  if (!estimate.project_id) throw new Error("先に見積を案件へ反映してください。");
+  if (estimate.status !== "accepted") throw new Error("採用済みの見積から請求予定を作成してください。");
+  const { data: existingInvoice, error: existingError } = await supabase.from("project_invoices").select("id").eq("estimate_id", id).neq("status", "cancelled").limit(1).maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+  if (existingInvoice) redirect(`/billing/${existingInvoice.id}/edit`);
+  const { data: itemRows, error: itemError } = await supabase.from("estimate_items").select("tax_rate").eq("estimate_id", id);
+  if (itemError) throw new Error(itemError.message);
+  const rates = Array.from(new Set((itemRows ?? []).map((x:any) => Number(x.tax_rate ?? 0))));
+  const taxRate = rates.length === 1 ? rates[0] : 0;
+  const { data: created, error: invoiceError } = await supabase.from("project_invoices").insert({
+    user_id: userId,
+    project_id: estimate.project_id,
+    company_id: estimate.company_id,
+    estimate_id: id,
+    title: `${estimate.title} 請求`,
+    status: "planned",
+    amount: Number(estimate.total_amount ?? 0),
+    scheduled_invoice_date: todayJstDate(),
+    line_description: estimate.title,
+    tax_rate: taxRate,
+    billing_name: estimate.billing_name,
+    billing_postal_code: estimate.billing_postal_code,
+    billing_address: estimate.billing_address,
+    memo: `${estimate.estimate_no ? `見積 ${estimate.estimate_no}` : `見積 ${id}`} より引継ぎ${rates.length > 1 ? "（複数税率のため請求書税率は0%で作成。税内訳は見積書を参照）" : ""}${estimate.memo ? `\n${estimate.memo}` : ""}`
+  }).select("id").single();
+  if (invoiceError) throw new Error(invoiceError.message);
+  invalidateBillingMutation(estimate.project_id);
+  revalidatePath(`/estimates/${id}`);
+  redirect(`/billing/${created.id}/edit`);
 }

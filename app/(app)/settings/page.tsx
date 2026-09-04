@@ -24,7 +24,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {calendar === "disconnected" && <div className="notice">Google Workspaceとの接続を解除しました。</div>}
       {calendar === "save_error" && <div className="notice error-notice">Google連携情報を保存できませんでした。Vercel環境変数とDB migrationを確認してください。</div>}
       {actionRules === "saved" && <div className="notice success-notice">優先アクションの判定条件を保存しました。</div>}
-      {invoiceSettingsSaved === "saved" && <div className="notice success-notice">請求書の発行者情報を保存しました。</div>}
+      {invoiceSettingsSaved === "saved" && <div className="notice success-notice">請求書・見積書の設定を保存しました。</div>}
 
       <section className="card" style={{ marginBottom: 18 }}>
         <div className="card-head"><h2>Google Workspace</h2><span className={`badge ${status.connected ? "green" : ""}`}>{status.connected ? "接続済み" : "未接続"}</span></div>
@@ -64,6 +64,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <a className="button soft" href="/api/export/csv/activities">活動履歴CSV</a>
               <a className="button soft" href="/api/export/csv/schedules">予定CSV</a>
               <a className="button soft" href="/api/export/csv/invoices">請求・入金CSV</a>
+              <a className="button soft" href="/api/export/csv/estimates">見積CSV</a>
             </div>
           </div>
           <p className="small muted" style={{ marginTop: 14 }}>Ver.2.3では安全性を優先し、バックアップからの自動復元は実装していません。復元が必要な場合はバックアップJSONを元に確認してから行います。</p>
@@ -72,7 +73,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
 
       <section className="card" id="invoice-settings" style={{ marginBottom: 18 }}>
-        <div className="card-head"><div><h2>請求書設定</h2><div className="small muted">請求書に表示する発行者・振込先・採番ルール</div></div></div>
+        <div className="card-head"><div><h2>請求書・見積書設定</h2><div className="small muted">帳票に表示する発行者情報と、請求書・見積書の採番ルール</div></div></div>
         <form action={saveInvoiceSettings} className="card-body settings-form">
           <div className="form-grid two">
             <label className="field"><span>発行者名 / 屋号</span><input name="issuer_name" defaultValue={invoiceSettings.issuerName}/><small>例：アカンパニー・パートナーズ</small></label>
@@ -103,8 +104,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <label className="field"><span>次回採番番号</span><input type="number" min="1" name="next_invoice_number" defaultValue={invoiceSettings.nextInvoiceNumber}/></label>
             <label className="field"><span>新規請求の既定税率</span><select name="default_tax_rate" defaultValue={String(invoiceSettings.defaultTaxRate)}><option value="0">0%</option><option value="8">8%</option><option value="10">10%</option></select></label>
           </div>
+          <div className="form-section inset-section">
+            <h3>見積書</h3>
+            <div className="form-grid three">
+              <label className="field"><span>見積番号の接頭辞</span><input name="estimate_prefix" defaultValue={invoiceSettings.estimatePrefix ?? "EST"}/><small>例：EST → EST-202609-0001</small></label>
+              <label className="field"><span>次回採番番号</span><input type="number" min="1" name="next_estimate_number" defaultValue={invoiceSettings.nextEstimateNumber ?? 1}/></label>
+              <label className="field"><span>既定の有効日数</span><input type="number" min="1" max="365" name="default_estimate_valid_days" defaultValue={invoiceSettings.defaultEstimateValidDays ?? 30}/><small>見積日から自動設定</small></label>
+            </div>
+            <label className="field"><span>見積書の既定条件・注記</span><textarea name="estimate_note" rows={3} defaultValue={invoiceSettings.estimateNote} placeholder="例：本見積の有効期限は発行日より30日間です。"/></label>
+          </div>
           <label className="field"><span>支払・振込に関する注記</span><textarea name="payment_note" rows={3} defaultValue={invoiceSettings.paymentNote} placeholder="例：振込手数料は貴社にてご負担ください。"/></label>
-          <div className="form-actions inline-settings-actions"><SubmitButton>請求書設定を保存</SubmitButton></div>
+          <div className="form-actions inline-settings-actions"><SubmitButton>帳票設定を保存</SubmitButton></div>
         </form>
       </section>
 
