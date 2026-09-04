@@ -9,7 +9,7 @@ export default async function ScheduleEditPage({ params }: { params: Promise<{ i
   if (!schedule) notFound();
   return <>
     <div className="page-head"><div><h1>予定編集</h1><p className="muted">登録済み予定を修正します。</p></div></div>
-    <form action={updateSchedule} className="form-card">
+    <form action={updateSchedule} className="form-card form-padded">
       <input type="hidden" name="id" value={schedule.id}/><input type="hidden" name="old_project_id" value={schedule.projectId ?? ""}/><input type="hidden" name="return_to" value="/schedule"/>
       <label className="field"><span>件名 *</span><input name="title" required defaultValue={schedule.title}/></label>
       <label className="field"><span>案件</span><select name="project_id" defaultValue={schedule.projectId ?? ""}><option value="">案件なし</option>{projects.map(p=><option key={p.id} value={p.id}>{p.companyName} / {p.name}</option>)}</select></label>

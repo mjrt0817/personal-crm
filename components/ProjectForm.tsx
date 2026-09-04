@@ -1,5 +1,6 @@
 import SubmitButton from "@/components/SubmitButton";
 import ProjectPricingFields from "@/components/ProjectPricingFields";
+import ProjectPartyFields from "@/components/ProjectPartyFields";
 import type { FormOptions, Project } from "@/lib/types";
 
 const statuses = [
@@ -15,8 +16,7 @@ export default function ProjectForm({ project, options, action }: { project?: Pr
         <h2>基本情報</h2>
         <div className="form-grid two">
           <label className="field"><span>案件名 *</span><input name="name" required defaultValue={project?.name}/></label>
-          <label className="field"><span>取引先 *</span><select name="company_id" required defaultValue={project?.companyId ?? ""}><option value="">選択してください</option>{options.companies.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-          <label className="field"><span>主担当者</span><select name="primary_contact_id" defaultValue={project?.contactId ?? ""}><option value="">未設定</option>{options.contacts.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <ProjectPartyFields options={options} companyId={project?.companyId} contactId={project?.contactId}/>
           <label className="field"><span>案件種別</span><select name="category_id" defaultValue={project?.categoryId ?? ""}><option value="">未設定</option>{options.categories.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label className="field"><span>ステータス</span><select name="status" defaultValue={project?.status ?? "consultation"}>{statuses.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
           <label className="field"><span>優先度</span><select name="priority" defaultValue={project?.priority ?? "medium"}><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select></label>

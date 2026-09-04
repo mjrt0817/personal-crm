@@ -81,6 +81,25 @@ async function authed() {
   return { supabase, userId: String(userId) };
 }
 
+
+async function validatePrimaryContactForCompany(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  companyId: string,
+  contactId: string | null
+) {
+  if (!contactId) return null;
+  const { data, error } = await supabase
+    .from("contacts")
+    .select("id,company_id")
+    .eq("id", contactId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data || data.company_id !== companyId) {
+    throw new Error("主担当者は選択した取引先に登録されている担当者から選択してください。");
+  }
+  return contactId;
+}
+
 async function resolveCompanyIdForProject(supabase: Awaited<ReturnType<typeof createClient>>, projectId: string | null, fallback: string | null) {
   if (!projectId) return fallback;
   const { data, error } = await supabase.from("projects").select("company_id").eq("id", projectId).single();
@@ -187,10 +206,12 @@ export async function archiveCompany(formData: FormData) {
 export async function createProject(formData: FormData) {
   if (demoMode) demoReturn(formData, "/projects");
   const { supabase, userId } = await authed();
+  const companyId = required(formData, "company_id", "取引先");
+  const primaryContactId = await validatePrimaryContactForCompany(supabase, companyId, optional(formData, "primary_contact_id"));
   const { data, error } = await supabase.from("projects").insert({
     user_id: userId,
-    company_id: required(formData, "company_id", "取引先"),
-    primary_contact_id: optional(formData, "primary_contact_id"),
+    company_id: companyId,
+    primary_contact_id: primaryContactId,
     category_id: optional(formData, "category_id"),
     name: required(formData, "name", "案件名"),
     status: text(formData, "status") || "consultation",
@@ -219,9 +240,11 @@ export async function updateProject(formData: FormData) {
   if (demoMode) demoReturn(formData, `/projects/${id}`);
   const { supabase } = await authed();
   const status = text(formData, "status") || "consultation";
+  const companyId = required(formData, "company_id", "取引先");
+  const primaryContactId = await validatePrimaryContactForCompany(supabase, companyId, optional(formData, "primary_contact_id"));
   const { error } = await supabase.from("projects").update({
-    company_id: required(formData, "company_id", "取引先"),
-    primary_contact_id: optional(formData, "primary_contact_id"),
+    company_id: companyId,
+    primary_contact_id: primaryContactId,
     category_id: optional(formData, "category_id"),
     name: required(formData, "name", "案件名"),
     status,

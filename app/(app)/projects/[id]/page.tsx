@@ -203,9 +203,9 @@ export default async function ProjectDetailPage({
       <section className="card project-billing-summary">
         <div className="card-head"><div><h2>請求・入金</h2><div className="small muted">案件売上から請求、入金までを追跡</div></div><div className="row-actions"><Link href={`/projects/${id}/billing/new`} className="button soft">＋ 請求予定</Link><Link href={`/projects/${id}/billing`} className="button">詳細 →</Link></div></div>
         <div className="card-body billing-mini-grid">
-          <div className="billing-mini"><span>未請求</span><strong>{(billing.plannedAmount + billing.suggestedAmount).toLocaleString("ja-JP")}円</strong></div>
-          <div className="billing-mini"><span>未入金</span><strong>{billing.outstandingAmount.toLocaleString("ja-JP")}円</strong></div>
-          <div className={`billing-mini ${billing.overdueAmount > 0 ? "is-danger" : ""}`}><span>期限超過</span><strong>{billing.overdueAmount.toLocaleString("ja-JP")}円</strong></div>
+          <div className="billing-mini"><span>請求前</span><strong>{(billing.plannedAmount + billing.suggestedAmount).toLocaleString("ja-JP")}円</strong></div>
+          <div className="billing-mini"><span>請求済</span><strong>{billing.issuedAmount.toLocaleString("ja-JP")}円</strong></div>
+          <div className={`billing-mini ${billing.overdueAmount > 0 ? "is-danger" : ""}`}><span>未入金</span><strong>{billing.outstandingAmount.toLocaleString("ja-JP")}円</strong>{billing.overdueAmount > 0 && <small>うち超過 {billing.overdueAmount.toLocaleString("ja-JP")}円</small>}</div>
           <div className="billing-mini"><span>入金済</span><strong>{billing.paidAmount.toLocaleString("ja-JP")}円</strong></div>
         </div>
         {billing.suggestedAmount > 0 && <div className="billing-project-hint">未割当の請求候補：{project.pricingModel === "unit" && billing.suggestedUnits != null ? `${billing.suggestedUnits}${project.unitLabel ?? "回"} / ` : ""}<strong>{billing.suggestedAmount.toLocaleString("ja-JP")}円</strong></div>}

@@ -19,7 +19,7 @@ export default async function TaskEditPage({
 
   return <>
     <div className="page-head"><div><h1>タスク編集</h1><p className="muted">登録済みタスクの内容・期限・状態を修正します。</p></div></div>
-    <form action={updateTask} className="form-card">
+    <form action={updateTask} className="form-card form-padded">
       <input type="hidden" name="id" value={task.id}/>
       <input type="hidden" name="old_project_id" value={task.projectId ?? ""}/><input type="hidden" name="company_id" value={task.companyId ?? ""}/>
       <input type="hidden" name="return_to" value={returnTo}/>

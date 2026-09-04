@@ -23,7 +23,7 @@ export default async function ContactEditPage({
         </div>
       </div>
 
-      <form action={updateContact} className="form-card">
+      <form action={updateContact} className="form-card form-padded">
         <input type="hidden" name="id" value={contact.id}/>
         <input type="hidden" name="company_id" value={contact.companyId}/>
 

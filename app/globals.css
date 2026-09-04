@@ -465,3 +465,22 @@ button.task-check.done { background:var(--success); }
   .project-billing-summary .row-actions { width:100%; }
   .project-billing-summary .row-actions .button { flex:1; }
 }
+
+/* Ver.2.7: 入力フォームの余白統一 */
+.form-card.form-padded { padding: 20px; }
+.form-card.form-padded > .form-actions {
+  margin: 8px -20px -20px;
+}
+.form-card.form-padded > .field:last-of-type { margin-bottom: 0; }
+.form-card.form-padded > .check-field:last-of-type { padding-bottom: 0; }
+.form-card .field small { line-height: 1.45; }
+
+@media (max-width:760px) {
+  .form-card.form-padded { padding:16px; }
+  .form-card.form-padded > .form-actions { margin:6px -16px -16px; }
+}
+
+/* Ver.2.7: 請求管理の見やすさ */
+.billing-filter-chips { margin-top:18px; }
+.billing-memo-preview { max-width:300px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.billing-mini small { display:block; margin-top:4px; font-size:11px; font-weight:600; }

@@ -9,7 +9,7 @@ export default async function LinkEditPage({ params }: { params: Promise<{ id: s
   if (!project || !link || link.projectId !== id) notFound();
   return <>
     <div className="page-head"><div><h1>関連URL編集</h1><p className="muted">{project.companyName} / {project.name}</p></div></div>
-    <form action={updateProjectLink} className="form-card">
+    <form action={updateProjectLink} className="form-card form-padded">
       <input type="hidden" name="id" value={link.id}/><input type="hidden" name="project_id" value={id}/><input type="hidden" name="return_to" value={`/projects/${id}?tab=links`}/>
       <div className="form-grid two">
         <label className="field"><span>表示名 *</span><input name="name" required defaultValue={link.name}/></label>

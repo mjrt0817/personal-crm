@@ -19,10 +19,10 @@ export default async function ProjectBillingPage({params}:{params:Promise<{id:st
     </div>
 
     <div className="grid-4 billing-kpis">
-      <MetricCard label="案件売上" value={yen(billing.projectRevenue)} note="受注・予定額"/>
-      <MetricCard label="未請求" value={yen(billing.plannedAmount + billing.suggestedAmount)} note={`予定登録 ${yen(billing.plannedAmount)} / 未割当 ${yen(billing.suggestedAmount)}`}/>
-      <MetricCard label="未入金" value={yen(billing.outstandingAmount)} note={billing.overdueCount ? `うち期限超過 ${yen(billing.overdueAmount)}` : "請求済・入金待ち"}/>
-      <MetricCard label="入金済" value={yen(billing.paidAmount)} note={`未割当 ${yen(billing.unallocatedAmount)}`}/>
+      <MetricCard label="案件予定売上" value={yen(billing.projectRevenue)} note="受注・予定額"/>
+      <MetricCard label="請求前" value={yen(billing.plannedAmount + billing.suggestedAmount)} note={`予定登録 ${yen(billing.plannedAmount)} / 未割当 ${yen(billing.suggestedAmount)}`}/>
+      <MetricCard label="請求済累計" value={yen(billing.issuedAmount)} note={`未入金 ${yen(billing.outstandingAmount)}${billing.overdueCount ? ` / 超過 ${yen(billing.overdueAmount)}` : ""}`}/>
+      <MetricCard label="入金済" value={yen(billing.paidAmount)} note={`入金率 ${billing.issuedAmount > 0 ? Math.round((billing.paidAmount / billing.issuedAmount) * 100) : 0}%`}/>
     </div>
 
     {billing.suggestedAmount > 0 && <section className="card billing-suggest-card">

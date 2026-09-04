@@ -71,7 +71,7 @@ export default async function GmailTaskPage({
         </div>
       </section>
 
-      <form action={createTaskFromGmail} className="form-card" style={{ marginTop: 16 }}>
+      <form action={createTaskFromGmail} className="form-card form-padded" style={{ marginTop: 16 }}>
         <input type="hidden" name="project_id" value={projectId}/>
         <input type="hidden" name="gmail_row_id" value={mail.id}/>
         <input type="hidden" name="company_id" value={project.companyId}/>
