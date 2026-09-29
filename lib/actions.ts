@@ -1060,17 +1060,19 @@ async function issueInvoiceRecord(
   const update: Record<string, unknown> = { status: "invoiced", invoice_date: invoiceDate || todayJstDate() };
   if (!currentReference) update.reference_no = await allocateInvoiceReference(supabase, userId);
 
-  // 発行者情報は初回発行時のスナップショットを維持する一方、
-  // 請求先は請求レコード上の最新の宛名・住所で更新する。
-  // これにより「請求済み後に宛名だけ訂正」が請求書へ反映される。
-  const snapshots = await buildInvoiceSnapshots(supabase, userId, data.company_id, {
-    name: data.billing_name,
-    postalCode: data.billing_postal_code,
-    address: data.billing_address
-  });
-  if (!data.issuer_snapshot) update.issuer_snapshot = snapshots.issuer_snapshot;
-  update.customer_snapshot = snapshots.customer_snapshot;
-  if (!data.issued_snapshot_at) update.issued_snapshot_at = snapshots.issued_snapshot_at;
+  // 請求書は初回発行時点で確定させる。
+  // 一度 issued_snapshot_at が入った後は、発行者・請求先のスナップショットを
+  // 設定変更や請求先編集で上書きしない。
+  if (!data.issued_snapshot_at) {
+    const snapshots = await buildInvoiceSnapshots(supabase, userId, data.company_id, {
+      name: data.billing_name,
+      postalCode: data.billing_postal_code,
+      address: data.billing_address
+    });
+    update.issuer_snapshot = snapshots.issuer_snapshot;
+    update.customer_snapshot = snapshots.customer_snapshot;
+    update.issued_snapshot_at = snapshots.issued_snapshot_at;
+  }
 
   const { error: updateError } = await supabase.from("project_invoices").update(update).eq("id", id).eq("project_id", projectId);
   if (updateError) throw new Error(updateError.message);
@@ -1161,13 +1163,35 @@ export async function updateProjectInvoice(formData: FormData) {
   if (demoMode) demoReturn(formData, `/projects/${projectId}?tab=billing`);
   const { supabase, userId } = await authed();
   const rawStatus = text(formData, "status");
-  const status = ["planned","invoiced","paid","cancelled"].includes(rawStatus) ? rawStatus : "planned";
+  const requestedStatus = ["planned","invoiced","paid","cancelled"].includes(rawStatus) ? rawStatus : "planned";
   const today = todayJstDate();
+
+  const { data: current, error: currentError } = await supabase.from("project_invoices")
+    .select("status,reference_no,invoice_date,paid_date,issued_snapshot_at")
+    .eq("id", id).eq("project_id", projectId).single();
+  if (currentError) throw new Error(currentError.message);
+
+  // 一度発行した請求書は帳票内容を固定する。
+  // 以後は入金状況（請求済→入金済）または取消だけを更新できる。
+  if (current.issued_snapshot_at) {
+    let nextStatus = current.status as string;
+    if (current.status === "invoiced" && ["invoiced", "paid", "cancelled"].includes(requestedStatus)) nextStatus = requestedStatus;
+    else if (current.status === "paid" && ["paid", "cancelled"].includes(requestedStatus)) nextStatus = requestedStatus;
+    else if (current.status === "cancelled") nextStatus = "cancelled";
+
+    const update: Record<string, unknown> = { status: nextStatus };
+    if (nextStatus === "paid") update.paid_date = optional(formData, "paid_date") || current.paid_date || today;
+
+    const { error } = await supabase.from("project_invoices").update(update).eq("id", id).eq("project_id", projectId);
+    if (error) throw new Error(error.message);
+    invalidateBillingMutation(projectId);
+    redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
+  }
+
   const amount = numberOrNull(formData, "amount");
   if (amount == null) throw new Error("請求額は必須です。");
   const taxRate = Math.max(0, Math.min(100, numberOrNull(formData, "tax_rate") ?? 0));
-  const { data: current, error: currentError } = await supabase.from("project_invoices").select("status,reference_no,invoice_date").eq("id", id).eq("project_id", projectId).single();
-  if (currentError) throw new Error(currentError.message);
+  const status = requestedStatus;
   const { error } = await supabase.from("project_invoices").update({
     title: required(formData, "title", "請求名"),
     status: status === "paid" ? "invoiced" : status,
@@ -1187,11 +1211,22 @@ export async function updateProjectInvoice(formData: FormData) {
     memo: optional(formData, "memo")
   }).eq("id", id).eq("project_id", projectId);
   if (error) throw new Error(error.message);
+
   if (["invoiced","paid"].includes(status)) {
-    await issueInvoiceRecord(supabase, userId, id, projectId, optional(formData, "reference_no") || current.reference_no, optional(formData, "invoice_date") || current.invoice_date);
+    await issueInvoiceRecord(
+      supabase,
+      userId,
+      id,
+      projectId,
+      optional(formData, "reference_no") || current.reference_no,
+      optional(formData, "invoice_date") || current.invoice_date
+    );
   }
   if (status === "paid") {
-    const { error: paidError } = await supabase.from("project_invoices").update({ status: "paid", paid_date: optional(formData, "paid_date") || today }).eq("id", id);
+    const { error: paidError } = await supabase.from("project_invoices").update({
+      status: "paid",
+      paid_date: optional(formData, "paid_date") || today
+    }).eq("id", id);
     if (paidError) throw new Error(paidError.message);
   }
   invalidateBillingMutation(projectId);
@@ -1235,6 +1270,11 @@ export async function deleteProjectInvoice(formData: FormData) {
   const projectId = required(formData, "project_id", "案件ID");
   if (demoMode) demoReturn(formData, returnTarget(formData, `/projects/${projectId}?tab=billing`));
   const { supabase } = await authed();
+  const { data: current, error: currentError } = await supabase.from("project_invoices")
+    .select("issued_snapshot_at")
+    .eq("id", id).eq("project_id", projectId).single();
+  if (currentError) throw new Error(currentError.message);
+  if (current.issued_snapshot_at) throw new Error("発行済み請求書は削除できません。必要な場合は取消として履歴を残してください。");
   const { error } = await supabase.from("project_invoices").delete().eq("id", id).eq("project_id", projectId);
   if (error) throw new Error(error.message);
   invalidateBillingMutation(projectId);

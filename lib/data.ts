@@ -1237,7 +1237,7 @@ export async function getInvoiceDocumentData(id: string): Promise<InvoiceDocumen
   ]);
   if (!project || !company) return null;
 
-  const issuer: InvoicePartySnapshot = invoice.issuerSnapshot ?? {
+  const currentIssuer: InvoicePartySnapshot = {
     name: settings.issuerName,
     postalCode: settings.issuerPostalCode,
     address: settings.issuerAddress,
@@ -1251,17 +1251,25 @@ export async function getInvoiceDocumentData(id: string): Promise<InvoiceDocumen
     bankAccountName: settings.bankAccountName,
     paymentNote: settings.paymentNote
   };
-  // 請求書固有の宛名・住所は、発行時スナップショットより優先する。
-  // これにより、発行後に請求先だけ訂正した場合も請求書へ即時反映される。
-  const customerSnapshot = invoice.customerSnapshot ?? {};
-  const customer: InvoicePartySnapshot = {
-    ...customerSnapshot,
-    name: invoice.billingName || customerSnapshot.name || company.name,
-    postalCode: invoice.billingPostalCode || customerSnapshot.postalCode || company.postalCode,
-    address: invoice.billingAddress || customerSnapshot.address || company.address,
-    phone: customerSnapshot.phone || company.phone,
-    email: customerSnapshot.email || company.email
+  const currentCustomer: InvoicePartySnapshot = {
+    name: invoice.billingName || company.name,
+    postalCode: invoice.billingPostalCode || company.postalCode,
+    address: invoice.billingAddress || company.address,
+    phone: company.phone,
+    email: company.email
   };
+
+  // 発行前は現在の設定・請求先入力をプレビューする。
+  // 一度発行した後は、その時点のスナップショットだけを使い、
+  // 設定や取引先情報を後から変更しても発行済み請求書を変えない。
+  const issued = Boolean(invoice.issuedSnapshotAt);
+  const issuer: InvoicePartySnapshot = issued
+    ? (invoice.issuerSnapshot ?? currentIssuer)
+    : currentIssuer;
+  const customer: InvoicePartySnapshot = issued
+    ? (invoice.customerSnapshot ?? currentCustomer)
+    : currentCustomer;
+
   const rate = Math.max(0, invoice.taxRate ?? 0);
   const taxAmount = rate > 0 ? Math.floor(invoice.amount * rate / (100 + rate)) : 0;
   const subtotal = invoice.amount - taxAmount;
