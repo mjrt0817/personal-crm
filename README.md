@@ -1,15 +1,24 @@
-# Ver.3.0.4 Hotfix — 発行者の屋号・氏名を分離
+# Personal CRM Ver.3.0.5 - 帳票明細枠 Hotfix
 
-## 変更内容
-- 設定の「発行者名 / 屋号」を「屋号 / 事業者名」と「氏名」に分離。
-- 請求書・見積書では屋号と氏名を別行表示。
-- どちらか未入力なら空行を残さず詰めて表示。
-- 発行済み請求書は既存スナップショット固定のまま。過去帳票は変更されません。
-- 旧発行済み帳票は旧 `name` を1行表示して互換維持。
+請求書・見積書の明細表で、最終行の下罫線が消えて枠が開いて見える問題を修正しました。
 
-## 適用順
-1. Supabase SQL Editorで `supabase/migrations/016_issuer_identity_fields.sql` を実行。
-2. このHotfix内のファイルをGitHubの同じパスへ上書き。
-3. Vercel自動デプロイ完了後、設定画面で屋号・氏名を確認して保存。
+## 原因
 
-既存の `issuer_name` は削除せず互換用に残します。migration実行時、既存値は屋号へ引き継ぎます。
+アプリ共通CSSの `tr:last-child td { border-bottom: 0; }` が、帳票用の明細テーブルにも適用されていました。
+
+## 修正
+
+`app/globals.css` に帳票専用の上書きを追加しています。
+
+```css
+.invoice-lines tbody tr:last-child td {
+  border-bottom: 1px solid #9ca3af;
+}
+```
+
+請求書・見積書の両方に反映されます。
+
+## 更新作業
+
+Supabase SQL、Google Cloud、Vercel環境変数の変更はありません。
+`app/globals.css` を上書きしてデプロイしてください。

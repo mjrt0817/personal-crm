@@ -509,6 +509,7 @@ button.task-check.done { background:var(--success); }
 .invoice-issuer > strong { display:block; font-size:15px; margin-bottom:5px; }
 .invoice-lines { margin-top:28px; width:100%; border-collapse:collapse; table-layout:fixed; }
 .invoice-lines th,.invoice-lines td { border:1px solid #9ca3af; padding:9px 8px; font-size:11px; }
+.invoice-lines tbody tr:last-child td { border-bottom:1px solid #9ca3af; }
 .invoice-lines th { background:#f3f4f6; color:#374151; text-align:center; }
 .invoice-lines th:first-child,.invoice-lines td:first-child { width:55%; text-align:left; }
 .invoice-lines th:nth-child(2),.invoice-lines td:nth-child(2) { width:12%; text-align:center; }
