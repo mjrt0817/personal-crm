@@ -983,7 +983,7 @@ function invalidateBillingMutation(projectId?: string | null) {
 
 async function getInvoiceSettingsRow(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
   const { data, error } = await supabase.from("invoice_settings")
-    .select("issuer_name,issuer_postal_code,issuer_address,issuer_phone,issuer_email,registration_number,bank_name,bank_branch,bank_account_type,bank_account_number,bank_account_name,invoice_prefix,next_invoice_number,default_tax_rate,payment_note,estimate_prefix,next_estimate_number,default_estimate_valid_days,estimate_note")
+    .select("issuer_name,issuer_trade_name,issuer_person_name,issuer_postal_code,issuer_address,issuer_phone,issuer_email,registration_number,bank_name,bank_branch,bank_account_type,bank_account_number,bank_account_name,invoice_prefix,next_invoice_number,default_tax_rate,payment_note,estimate_prefix,next_estimate_number,default_estimate_valid_days,estimate_note")
     .eq("user_id", userId)
     .maybeSingle();
   if (error && !["42P01", "PGRST205"].includes(error.code ?? "")) throw new Error(error.message);
@@ -1021,7 +1021,9 @@ async function buildInvoiceSnapshots(
   const company = companyResult.data;
   return {
     issuer_snapshot: {
-      name: settings?.issuer_name || "",
+      name: settings?.issuer_name || settings?.issuer_trade_name || settings?.issuer_person_name || "",
+      tradeName: settings?.issuer_trade_name || settings?.issuer_name || undefined,
+      personName: settings?.issuer_person_name || undefined,
       postalCode: settings?.issuer_postal_code || undefined,
       address: settings?.issuer_address || undefined,
       phone: settings?.issuer_phone || undefined,
@@ -1083,9 +1085,14 @@ export async function saveInvoiceSettings(formData: FormData) {
   const { supabase, userId } = await authed();
   const defaultTax = numberOrNull(formData, "default_tax_rate") ?? 10;
   const nextNumber = Math.max(1, Math.floor(numberOrNull(formData, "next_invoice_number") ?? 1));
+  const issuerTradeName = optional(formData, "issuer_trade_name");
+  const issuerPersonName = optional(formData, "issuer_person_name");
   const payload = {
     user_id: userId,
-    issuer_name: text(formData, "issuer_name"),
+    // issuer_name は旧バージョン互換用に残します。
+    issuer_name: issuerTradeName || issuerPersonName || "",
+    issuer_trade_name: issuerTradeName,
+    issuer_person_name: issuerPersonName,
     issuer_postal_code: optional(formData, "issuer_postal_code"),
     issuer_address: optional(formData, "issuer_address"),
     issuer_phone: optional(formData, "issuer_phone"),
@@ -1359,7 +1366,9 @@ async function buildEstimateSnapshots(
   const company = companyResult.data;
   return {
     issuer_snapshot: {
-      name: settings?.issuer_name || "",
+      name: settings?.issuer_name || settings?.issuer_trade_name || settings?.issuer_person_name || "",
+      tradeName: settings?.issuer_trade_name || settings?.issuer_name || undefined,
+      personName: settings?.issuer_person_name || undefined,
       postalCode: settings?.issuer_postal_code || undefined,
       address: settings?.issuer_address || undefined,
       phone: settings?.issuer_phone || undefined,

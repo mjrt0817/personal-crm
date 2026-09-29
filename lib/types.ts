@@ -312,7 +312,10 @@ export type ProjectInvoice = {
 
 
 export type InvoiceSettings = {
+  /** 旧バージョン互換用。新規表示では issuerTradeName / issuerPersonName を使用します。 */
   issuerName: string;
+  issuerTradeName?: string;
+  issuerPersonName?: string;
   issuerPostalCode?: string;
   issuerAddress?: string;
   issuerPhone?: string;
@@ -334,7 +337,10 @@ export type InvoiceSettings = {
 };
 
 export type InvoicePartySnapshot = {
+  /** 旧発行済み帳票との互換用。 */
   name?: string;
+  tradeName?: string;
+  personName?: string;
   postalCode?: string;
   address?: string;
   phone?: string;

@@ -5,6 +5,11 @@ import { getInvoiceDocumentData } from "@/lib/data";
 
 function yen(value:number){ return `¥${Math.round(value).toLocaleString("ja-JP")}`; }
 function date(value?:string){ return value ? value.replaceAll("-", "/") : "—"; }
+function issuerNameLines(issuer:{tradeName?:string;personName?:string;name?:string}) {
+  const current = [issuer.tradeName, issuer.personName].filter((value): value is string => Boolean(value?.trim()));
+  if (current.length) return current;
+  return issuer.name?.trim() ? [issuer.name.trim()] : [];
+}
 
 export default async function InvoiceDocumentPage({params}:{params:Promise<{id:string}>}) {
   const {id}=await params;
@@ -14,6 +19,7 @@ export default async function InvoiceDocumentPage({params}:{params:Promise<{id:s
   const qty=invoice.unitQuantity;
   const unitPrice=invoice.unitPrice;
   const line=invoice.lineDescription || invoice.title || project.name;
+  const issuerNames = issuerNameLines(issuer);
   return <div className="invoice-document-shell">
     <div className="invoice-document-toolbar no-print">
       <Link className="button" href={`/projects/${invoice.projectId}/billing`}>← 請求管理へ</Link>
@@ -45,7 +51,7 @@ export default async function InvoiceDocumentPage({params}:{params:Promise<{id:s
           <div className="invoice-total-box"><span>ご請求金額</span><strong>{yen(invoice.amount)}</strong></div>
         </div>
         <div className="invoice-issuer">
-          <strong>{issuer.name || "発行者情報未設定"}</strong>
+          {issuerNames.length ? issuerNames.map((name,index)=><div key={`${name}-${index}`} className="invoice-issuer-name">{index===0 ? <strong>{name}</strong> : name}</div>) : <strong>発行者情報未設定</strong>}
           {issuer.postalCode && <div>〒{issuer.postalCode}</div>}
           {issuer.address && <div>{issuer.address}</div>}
           {issuer.phone && <div>TEL：{issuer.phone}</div>}
@@ -80,7 +86,7 @@ export default async function InvoiceDocumentPage({params}:{params:Promise<{id:s
         {invoice.memo && <p>{invoice.memo}</p>}
       </section>}
 
-      {!issuer.name && <div className="invoice-warning no-print">設定 → 請求書設定で発行者情報を入力してください。</div>}
+      {!issuerNames.length && <div className="invoice-warning no-print">設定 → 請求書設定で屋号または氏名を入力してください。</div>}
     </main>
   </div>;
 }

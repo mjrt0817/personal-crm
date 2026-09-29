@@ -1185,6 +1185,8 @@ export async function getBillingSnapshot(): Promise<BillingSnapshot> {
 export async function getInvoiceSettings(): Promise<InvoiceSettings> {
   const defaults: InvoiceSettings = {
     issuerName: "",
+    issuerTradeName: "",
+    issuerPersonName: "",
     invoicePrefix: "INV",
     nextInvoiceNumber: 1,
     defaultTaxRate: 10,
@@ -1196,7 +1198,7 @@ export async function getInvoiceSettings(): Promise<InvoiceSettings> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("invoice_settings")
-    .select("issuer_name,issuer_postal_code,issuer_address,issuer_phone,issuer_email,registration_number,bank_name,bank_branch,bank_account_type,bank_account_number,bank_account_name,invoice_prefix,next_invoice_number,default_tax_rate,payment_note,estimate_prefix,next_estimate_number,default_estimate_valid_days,estimate_note")
+    .select("issuer_name,issuer_trade_name,issuer_person_name,issuer_postal_code,issuer_address,issuer_phone,issuer_email,registration_number,bank_name,bank_branch,bank_account_type,bank_account_number,bank_account_name,invoice_prefix,next_invoice_number,default_tax_rate,payment_note,estimate_prefix,next_estimate_number,default_estimate_valid_days,estimate_note")
     .maybeSingle();
   if (error) {
     if (["42P01", "PGRST205"].includes(error.code ?? "")) return defaults;
@@ -1204,7 +1206,9 @@ export async function getInvoiceSettings(): Promise<InvoiceSettings> {
   }
   if (!data) return defaults;
   return {
-    issuerName: data.issuer_name ?? "",
+    issuerName: data.issuer_name ?? data.issuer_trade_name ?? data.issuer_person_name ?? "",
+    issuerTradeName: data.issuer_trade_name ?? data.issuer_name ?? undefined,
+    issuerPersonName: data.issuer_person_name ?? undefined,
     issuerPostalCode: data.issuer_postal_code ?? undefined,
     issuerAddress: data.issuer_address ?? undefined,
     issuerPhone: data.issuer_phone ?? undefined,
@@ -1239,6 +1243,8 @@ export async function getInvoiceDocumentData(id: string): Promise<InvoiceDocumen
 
   const currentIssuer: InvoicePartySnapshot = {
     name: settings.issuerName,
+    tradeName: settings.issuerTradeName,
+    personName: settings.issuerPersonName,
     postalCode: settings.issuerPostalCode,
     address: settings.issuerAddress,
     phone: settings.issuerPhone,
@@ -1378,6 +1384,8 @@ export async function getEstimateDocumentData(id: string): Promise<EstimateDocum
   const [company, settings] = await Promise.all([getCompanyBase(estimate.companyId), getInvoiceSettings()]);
   const issuer: InvoicePartySnapshot = estimate.issuerSnapshot ?? {
     name: settings.issuerName,
+    tradeName: settings.issuerTradeName,
+    personName: settings.issuerPersonName,
     postalCode: settings.issuerPostalCode,
     address: settings.issuerAddress,
     phone: settings.issuerPhone,

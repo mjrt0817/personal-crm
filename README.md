@@ -1,24 +1,15 @@
-# Personal CRM Ver.3.0.3 Hotfix
-
-発行済み請求書の内容を固定するための修正です。
+# Ver.3.0.4 Hotfix — 発行者の屋号・氏名を分離
 
 ## 変更内容
+- 設定の「発行者名 / 屋号」を「屋号 / 事業者名」と「氏名」に分離。
+- 請求書・見積書では屋号と氏名を別行表示。
+- どちらか未入力なら空行を残さず詰めて表示。
+- 発行済み請求書は既存スナップショット固定のまま。過去帳票は変更されません。
+- 旧発行済み帳票は旧 `name` を1行表示して互換維持。
 
-- 未発行の請求書は、現在の請求書設定・請求先情報をプレビュー表示
-- 初回発行時に発行者情報と請求先情報をスナップショット保存
-- 発行済み請求書は、その後設定や取引先情報を変更しても表示内容を変更しない
-- 発行済み請求書の編集画面では、帳票内容を編集不可にし、状態・入金日のみ更新可能
-- 発行済み請求書は削除不可。必要な場合は「取消」として履歴を残す
-- DBトリガーでも発行済み請求書の帳票内容変更・削除を防止
+## 適用順
+1. Supabase SQL Editorで `supabase/migrations/016_issuer_identity_fields.sql` を実行。
+2. このHotfix内のファイルをGitHubの同じパスへ上書き。
+3. Vercel自動デプロイ完了後、設定画面で屋号・氏名を確認して保存。
 
-## 反映手順
-
-1. Supabase SQL Editor で `015_invoice_immutability.sql` を実行
-2. Hotfix内の以下をGitHubへ同じパスで上書き
-   - `lib/data.ts`
-   - `lib/actions.ts`
-   - `components/InvoiceForm.tsx`
-   - `app/(app)/billing/[id]/edit/page.tsx`
-3. Vercelの自動デプロイ完了を待つ
-
-Google Cloud / Vercel環境変数の変更はありません。
+既存の `issuer_name` は削除せず互換用に残します。migration実行時、既存値は屋号へ引き継ぎます。

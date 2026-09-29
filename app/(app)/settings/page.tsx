@@ -76,7 +76,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <div className="card-head"><div><h2>請求書・見積書設定</h2><div className="small muted">帳票に表示する発行者情報と、請求書・見積書の採番ルール</div></div></div>
         <form action={saveInvoiceSettings} className="card-body settings-form">
           <div className="form-grid two">
-            <label className="field"><span>発行者名 / 屋号</span><input name="issuer_name" defaultValue={invoiceSettings.issuerName}/><small>例：アカンパニー・パートナーズ</small></label>
+            <label className="field"><span>屋号 / 事業者名</span><input name="issuer_trade_name" defaultValue={invoiceSettings.issuerTradeName}/><small>例：アカンパニー・パートナーズ</small></label>
+            <label className="field"><span>氏名</span><input name="issuer_person_name" defaultValue={invoiceSettings.issuerPersonName}/><small>例：種村 龍太</small></label>
+          </div>
+          <div className="form-grid two">
             <label className="field"><span>適格請求書発行事業者 登録番号</span><input name="registration_number" defaultValue={invoiceSettings.registrationNumber}/><small>登録している場合のみ。例：T1234567890123</small></label>
           </div>
           <div className="form-grid two">
