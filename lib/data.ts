@@ -1251,12 +1251,16 @@ export async function getInvoiceDocumentData(id: string): Promise<InvoiceDocumen
     bankAccountName: settings.bankAccountName,
     paymentNote: settings.paymentNote
   };
-  const customer: InvoicePartySnapshot = invoice.customerSnapshot ?? {
-    name: invoice.billingName || company.name,
-    postalCode: invoice.billingPostalCode || company.postalCode,
-    address: invoice.billingAddress || company.address,
-    phone: company.phone,
-    email: company.email
+  // 請求書固有の宛名・住所は、発行時スナップショットより優先する。
+  // これにより、発行後に請求先だけ訂正した場合も請求書へ即時反映される。
+  const customerSnapshot = invoice.customerSnapshot ?? {};
+  const customer: InvoicePartySnapshot = {
+    ...customerSnapshot,
+    name: invoice.billingName || customerSnapshot.name || company.name,
+    postalCode: invoice.billingPostalCode || customerSnapshot.postalCode || company.postalCode,
+    address: invoice.billingAddress || customerSnapshot.address || company.address,
+    phone: customerSnapshot.phone || company.phone,
+    email: customerSnapshot.email || company.email
   };
   const rate = Math.max(0, invoice.taxRate ?? 0);
   const taxAmount = rate > 0 ? Math.floor(invoice.amount * rate / (100 + rate)) : 0;

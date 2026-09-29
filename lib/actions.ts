@@ -1054,18 +1054,24 @@ async function issueInvoiceRecord(
   invoiceDate?: string | null
 ) {
   const { data, error } = await supabase.from("project_invoices")
-    .select("company_id,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot")
+    .select("company_id,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot,issued_snapshot_at")
     .eq("id", id).eq("project_id", projectId).single();
   if (error) throw new Error(error.message);
   const update: Record<string, unknown> = { status: "invoiced", invoice_date: invoiceDate || todayJstDate() };
   if (!currentReference) update.reference_no = await allocateInvoiceReference(supabase, userId);
-  if (!data.issuer_snapshot || !data.customer_snapshot) {
-    Object.assign(update, await buildInvoiceSnapshots(supabase, userId, data.company_id, {
-      name: data.billing_name,
-      postalCode: data.billing_postal_code,
-      address: data.billing_address
-    }));
-  }
+
+  // 発行者情報は初回発行時のスナップショットを維持する一方、
+  // 請求先は請求レコード上の最新の宛名・住所で更新する。
+  // これにより「請求済み後に宛名だけ訂正」が請求書へ反映される。
+  const snapshots = await buildInvoiceSnapshots(supabase, userId, data.company_id, {
+    name: data.billing_name,
+    postalCode: data.billing_postal_code,
+    address: data.billing_address
+  });
+  if (!data.issuer_snapshot) update.issuer_snapshot = snapshots.issuer_snapshot;
+  update.customer_snapshot = snapshots.customer_snapshot;
+  if (!data.issued_snapshot_at) update.issued_snapshot_at = snapshots.issued_snapshot_at;
+
   const { error: updateError } = await supabase.from("project_invoices").update(update).eq("id", id).eq("project_id", projectId);
   if (updateError) throw new Error(updateError.message);
 }
