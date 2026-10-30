@@ -444,6 +444,8 @@ create trigger set_project_invoices_updated_at before update on public.project_i
 create table if not exists public.invoice_settings (
   user_id uuid primary key references auth.users(id) on delete cascade,
   issuer_name text not null default '',
+  issuer_trade_name text,
+  issuer_person_name text,
   issuer_postal_code text,
   issuer_address text,
   issuer_phone text,

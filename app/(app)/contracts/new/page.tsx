@@ -1,0 +1,2 @@
+import ContractForm from "@/components/ContractForm";import {createContract} from "@/lib/actions";import {getContractFormOptions} from "@/lib/data";
+export default async function Page({searchParams}:{searchParams:Promise<{company_id?:string}>}){const q=await searchParams;const options=await getContractFormOptions();return <><div className="page-head"><div><h1>契約を登録</h1><p className="muted">月契約・年間契約、前払い、次回請求日を管理します。</p></div></div><ContractForm options={options} companyId={q.company_id} action={createContract}/></>}

@@ -15,6 +15,8 @@ export const BACKUP_TABLES = [
   "gmail_messages",
   "user_preferences",
   "project_invoices",
+  "contracts",
+  "contract_invoice_lines",
   "estimates",
   "estimate_items",
   "invoice_settings"
@@ -36,7 +38,7 @@ export async function getBackupPayload() {
 
   return {
     format: "personal-crm-backup",
-    version: "2.9",
+    version: "3.1",
     exported_at: new Date().toISOString(),
     note: "Google OAuth refresh token / secret information is intentionally excluded.",
     tables: Object.fromEntries(entries)
@@ -67,6 +69,7 @@ export const CSV_KINDS = {
   activities: { table: "activities", label: "活動履歴" },
   schedules: { table: "schedules", label: "スケジュール" },
   invoices: { table: "project_invoices", label: "請求・入金" },
+  contracts: { table: "contracts", label: "契約" },
   estimates: { table: "estimates", label: "見積" }
 } as const;
 

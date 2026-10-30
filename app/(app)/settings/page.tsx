@@ -64,6 +64,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <a className="button soft" href="/api/export/csv/activities">活動履歴CSV</a>
               <a className="button soft" href="/api/export/csv/schedules">予定CSV</a>
               <a className="button soft" href="/api/export/csv/invoices">請求・入金CSV</a>
+              <a className="button soft" href="/api/export/csv/contracts">契約CSV</a>
               <a className="button soft" href="/api/export/csv/estimates">見積CSV</a>
             </div>
           </div>

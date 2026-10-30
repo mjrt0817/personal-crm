@@ -14,6 +14,9 @@ export type Priority = "high" | "medium" | "low";
 export type TaskStatus = "todo" | "doing" | "waiting" | "completed";
 export type PricingModel = "fixed" | "unit";
 export type BillingStatus = "planned" | "invoiced" | "paid" | "cancelled";
+export type ContractStatus = "draft" | "active" | "paused" | "ended";
+export type ContractCycle = "monthly" | "annual";
+export type ContractBillingTiming = "prepaid" | "postpaid";
 
 export type ProjectLink = {
   id: string;
@@ -281,11 +284,12 @@ export type SalesPipelineSnapshot = {
 
 export type ProjectInvoice = {
   id: string;
-  projectId: string;
+  projectId?: string;
   projectName?: string;
   companyId: string;
   companyName?: string;
   title: string;
+  sourceType?: "project" | "estimate" | "contracts";
   status: BillingStatus;
   amount: number;
   unitQuantity?: number;
@@ -310,6 +314,63 @@ export type ProjectInvoice = {
   daysOverdue?: number;
 };
 
+
+
+
+export type Contract = {
+  id: string;
+  companyId: string;
+  companyName: string;
+  projectId?: string;
+  projectName?: string;
+  name: string;
+  status: ContractStatus;
+  cycle: ContractCycle;
+  amount: number;
+  taxRate: number;
+  billingTiming: ContractBillingTiming;
+  startDate: string;
+  endDate?: string;
+  autoRenew: boolean;
+  nextPeriodStart: string;
+  nextBillingDate: string;
+  memo?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ContractInvoiceLine = {
+  id?: string;
+  contractId?: string;
+  contractName?: string;
+  projectId?: string;
+  description: string;
+  servicePeriodStart?: string;
+  servicePeriodEnd?: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  taxRate: number;
+  amount: number;
+  sortOrder: number;
+};
+
+export type ContractBillingGroup = {
+  companyId: string;
+  companyName: string;
+  dueContracts: Contract[];
+  dueAmount: number;
+};
+
+export type ContractSnapshot = {
+  activeCount: number;
+  monthlyRecurring: number;
+  annualRecurring: number;
+  dueCount: number;
+  dueAmount: number;
+  contracts: Contract[];
+  billingGroups: ContractBillingGroup[];
+};
 
 export type InvoiceSettings = {
   /** 旧バージョン互換用。新規表示では issuerTradeName / issuerPersonName を使用します。 */
@@ -356,11 +417,13 @@ export type InvoicePartySnapshot = {
 
 export type InvoiceDocumentData = {
   invoice: ProjectInvoice;
-  project: Project;
+  project?: Project;
   issuer: InvoicePartySnapshot;
   customer: InvoicePartySnapshot;
+  lines: ContractInvoiceLine[];
   taxAmount: number;
   subtotal: number;
+  taxBreakdown: Array<{ rate: number; taxAmount: number; subtotal: number; amount: number }>;
 };
 
 export type ProjectBillingSummary = {

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { companies as demoCompanies, projects as demoProjects, schedules as demoSchedules, tasks as demoTasks } from "@/lib/mock-data";
-import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail, SalesPipelineSnapshot, ProjectInvoice, ProjectBillingSummary, BillingSnapshot, BillingStatus, InvoiceSettings, InvoiceDocumentData, InvoicePartySnapshot, Estimate, EstimateItem, EstimateStatus, EstimateDocumentData, EstimateSettings, EstimateFormOptions } from "@/lib/types";
+import type { Activity, ActivityDetail, Company, CompanyDetail, ContactDetail, FormOptions, Project, ProjectHeader, ProjectLink, ProjectLinkDetail, ProjectDriveSummary, ProjectGmailSummary, GmailMessageItem, ScheduleDetail, Task, TaskDetail, SalesPipelineSnapshot, ProjectInvoice, ProjectBillingSummary, BillingSnapshot, BillingStatus, InvoiceSettings, InvoiceDocumentData, InvoicePartySnapshot, Estimate, EstimateItem, EstimateStatus, EstimateDocumentData, EstimateSettings, EstimateFormOptions, Contract, ContractSnapshot, ContractInvoiceLine } from "@/lib/types";
 import { getActionPreferences } from "@/lib/preferences";
 
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
@@ -1018,11 +1018,12 @@ function mapInvoiceRow(row: any): ProjectInvoice {
   const daysOverdue = overdue ? Math.max(1, Math.floor((new Date(`${today}T00:00:00+09:00`).getTime() - new Date(`${row.due_date}T00:00:00+09:00`).getTime()) / 86400000)) : undefined;
   return {
     id: row.id,
-    projectId: row.project_id,
+    projectId: row.project_id ?? undefined,
     projectName: row.projects?.name ?? undefined,
     companyId: row.company_id,
     companyName: row.companies?.name ?? row.projects?.companies?.name ?? undefined,
     title: row.title,
+    sourceType: row.source_type ?? "project",
     status: row.status as BillingStatus,
     amount: numericOrUndefined(row.amount) ?? 0,
     unitQuantity: numericOrUndefined(row.unit_quantity),
@@ -1053,7 +1054,7 @@ export async function getInvoiceDetail(id: string): Promise<ProjectInvoice | nul
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("project_invoices")
-    .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,line_description,tax_rate,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot,issued_snapshot_at,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
+    .select("id,project_id,company_id,title,source_type,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,line_description,tax_rate,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot,issued_snapshot_at,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
     .eq("id", id)
     .single();
   if (error) {
@@ -1077,8 +1078,9 @@ export async function getProjectBillingSummary(projectId: string): Promise<Proje
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("project_invoices")
-    .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,line_description,tax_rate,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot,issued_snapshot_at,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
+    .select("id,project_id,company_id,title,source_type,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,line_description,tax_rate,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot,issued_snapshot_at,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
     .eq("project_id", projectId)
+    .neq("source_type", "contracts")
     .order("created_at", { ascending: false });
   if (error) {
     if (["42P01", "PGRST205"].includes(error.code ?? "")) return {
@@ -1120,7 +1122,7 @@ export async function getBillingSnapshot(): Promise<BillingSnapshot> {
   const [invoiceResult, projectResult] = await Promise.all([
     supabase
       .from("project_invoices")
-      .select("id,project_id,company_id,title,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,line_description,tax_rate,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot,issued_snapshot_at,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
+      .select("id,project_id,company_id,title,source_type,status,amount,unit_quantity,unit_price,scheduled_invoice_date,invoice_date,due_date,paid_date,reference_no,line_description,tax_rate,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot,issued_snapshot_at,memo,created_at,updated_at,projects(name,companies(name)),companies(name)")
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false }),
     supabase
@@ -1139,7 +1141,7 @@ export async function getBillingSnapshot(): Promise<BillingSnapshot> {
   const active = invoices.filter((x) => x.status !== "cancelled");
   const projects = ((projectResult.data ?? []) as unknown as RawProject[]).map(mapProject);
   const allocatedByProject = new Map<string, number>();
-  for (const inv of active) allocatedByProject.set(inv.projectId, (allocatedByProject.get(inv.projectId) ?? 0) + inv.amount);
+  for (const inv of active) { if (inv.projectId && inv.sourceType !== "contracts") allocatedByProject.set(inv.projectId, (allocatedByProject.get(inv.projectId) ?? 0) + inv.amount); }
   let unbilledReadyAmount = 0;
   let unbilledReadyCount = 0;
   const unbilledProjects: BillingSnapshot["unbilledProjects"] = [];
@@ -1150,7 +1152,7 @@ export async function getBillingSnapshot(): Promise<BillingSnapshot> {
       unbilledReadyAmount += remaining;
       unbilledReadyCount += 1;
       const unitPrice = project.unitPrice ?? 0;
-      const allocatedUnits = active.filter((x) => x.projectId === project.id).reduce((sum, x) => sum + (x.unitQuantity ?? ((project.unitPrice ?? 0) > 0 ? x.amount / (project.unitPrice ?? 1) : 0)), 0);
+      const allocatedUnits = active.filter((x) => x.projectId === project.id && x.sourceType !== "contracts").reduce((sum, x) => sum + (x.unitQuantity ?? ((project.unitPrice ?? 0) > 0 ? x.amount / (project.unitPrice ?? 1) : 0)), 0);
       const readyUnits = project.pricingModel === "unit" ? Math.max(0, (project.completedUnits ?? 0) - allocatedUnits) : undefined;
       unbilledProjects.push({ projectId:project.id, projectName:project.name, companyName:project.companyName, amount:remaining, units:readyUnits, unitLabel:project.unitLabel });
     }
@@ -1235,11 +1237,11 @@ export async function getInvoiceDocumentData(id: string): Promise<InvoiceDocumen
   const invoice = await getInvoiceDetail(id);
   if (!invoice) return null;
   const [project, company, settings] = await Promise.all([
-    getProjectBase(invoice.projectId),
+    invoice.projectId ? getProjectBase(invoice.projectId) : Promise.resolve(null),
     getCompanyBase(invoice.companyId),
     getInvoiceSettings()
   ]);
-  if (!project || !company) return null;
+  if (!company) return null;
 
   const currentIssuer: InvoicePartySnapshot = {
     name: settings.issuerName,
@@ -1265,21 +1267,62 @@ export async function getInvoiceDocumentData(id: string): Promise<InvoiceDocumen
     email: company.email
   };
 
-  // 発行前は現在の設定・請求先入力をプレビューする。
-  // 一度発行した後は、その時点のスナップショットだけを使い、
-  // 設定や取引先情報を後から変更しても発行済み請求書を変えない。
   const issued = Boolean(invoice.issuedSnapshotAt);
-  const issuer: InvoicePartySnapshot = issued
-    ? (invoice.issuerSnapshot ?? currentIssuer)
-    : currentIssuer;
-  const customer: InvoicePartySnapshot = issued
-    ? (invoice.customerSnapshot ?? currentCustomer)
-    : currentCustomer;
+  const issuer: InvoicePartySnapshot = issued ? (invoice.issuerSnapshot ?? currentIssuer) : currentIssuer;
+  const customer: InvoicePartySnapshot = issued ? (invoice.customerSnapshot ?? currentCustomer) : currentCustomer;
 
-  const rate = Math.max(0, invoice.taxRate ?? 0);
-  const taxAmount = rate > 0 ? Math.floor(invoice.amount * rate / (100 + rate)) : 0;
-  const subtotal = invoice.amount - taxAmount;
-  return { invoice, project, issuer, customer, taxAmount, subtotal };
+  const supabase = await createClient();
+  let lines: ContractInvoiceLine[] = [];
+  const { data: lineRows, error: lineError } = await supabase
+    .from("contract_invoice_lines")
+    .select("id,contract_id,project_id,description,service_period_start,service_period_end,quantity,unit,unit_price,tax_rate,amount,sort_order,contracts(name)")
+    .eq("invoice_id", id)
+    .order("sort_order", { ascending: true });
+  if (lineError && !["42P01", "PGRST205"].includes(lineError.code ?? "")) throw new Error(lineError.message);
+  lines = (lineRows ?? []).map((row:any) => ({
+    id: row.id,
+    contractId: row.contract_id ?? undefined,
+    contractName: row.contracts?.name ?? undefined,
+    projectId: row.project_id ?? undefined,
+    description: row.description,
+    servicePeriodStart: row.service_period_start ?? undefined,
+    servicePeriodEnd: row.service_period_end ?? undefined,
+    quantity: Number(row.quantity ?? 1),
+    unit: row.unit ?? "式",
+    unitPrice: Number(row.unit_price ?? 0),
+    taxRate: Number(row.tax_rate ?? 0),
+    amount: Number(row.amount ?? 0),
+    sortOrder: Number(row.sort_order ?? 0)
+  }));
+
+  if (!lines.length) {
+    const qty = invoice.unitQuantity ?? 1;
+    const unit = project?.unitLabel ?? "式";
+    const unitPrice = invoice.unitPrice ?? invoice.amount;
+    lines = [{
+      description: invoice.lineDescription || invoice.title || project?.name || "請求明細",
+      quantity: qty,
+      unit,
+      unitPrice,
+      taxRate: invoice.taxRate ?? 0,
+      amount: invoice.amount,
+      sortOrder: 0
+    }];
+  }
+
+  const byRate = new Map<number, { amount:number; taxAmount:number; subtotal:number }>();
+  for (const line of lines) {
+    const rate = Math.max(0, line.taxRate || 0);
+    const tax = rate > 0 ? Math.floor(line.amount * rate / (100 + rate)) : 0;
+    const subtotal = line.amount - tax;
+    const current = byRate.get(rate) ?? { amount:0, taxAmount:0, subtotal:0 };
+    current.amount += line.amount; current.taxAmount += tax; current.subtotal += subtotal;
+    byRate.set(rate, current);
+  }
+  const taxBreakdown = [...byRate.entries()].sort((a,b)=>a[0]-b[0]).map(([rate,v])=>({ rate, ...v }));
+  const taxAmount = taxBreakdown.reduce((sum,x)=>sum+x.taxAmount,0);
+  const subtotal = taxBreakdown.reduce((sum,x)=>sum+x.subtotal,0);
+  return { invoice, project: project ?? undefined, issuer, customer, lines, taxAmount, subtotal, taxBreakdown };
 }
 
 function mapEstimateItem(row: any): EstimateItem {
@@ -1431,4 +1474,114 @@ export async function getEstimateLinkedInvoices(estimateId: string): Promise<Arr
     throw new Error(error.message);
   }
   return (data ?? []).map((x:any)=>({id:x.id,status:x.status as BillingStatus,amount:Number(x.amount??0),referenceNo:x.reference_no??undefined}));
+}
+
+
+function mapContractRow(row:any): Contract {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    companyName: row.companies?.name ?? "取引先",
+    projectId: row.project_id ?? undefined,
+    projectName: row.projects?.name ?? undefined,
+    name: row.name,
+    status: row.status,
+    cycle: row.cycle,
+    amount: Number(row.amount ?? 0),
+    taxRate: Number(row.tax_rate ?? 0),
+    billingTiming: row.billing_timing,
+    startDate: row.start_date,
+    endDate: row.end_date ?? undefined,
+    autoRenew: Boolean(row.auto_renew),
+    nextPeriodStart: row.next_period_start,
+    nextBillingDate: row.next_billing_date,
+    memo: row.memo ?? undefined,
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined
+  };
+}
+
+const CONTRACT_SELECT = "id,company_id,project_id,name,status,cycle,amount,tax_rate,billing_timing,start_date,end_date,auto_renew,next_period_start,next_billing_date,memo,created_at,updated_at,companies(name),projects(name)";
+
+export async function getContracts(companyId?: string): Promise<Contract[]> {
+  if (demoMode) return [];
+  const supabase = await createClient();
+  let query = supabase.from("contracts").select(CONTRACT_SELECT).order("next_billing_date", { ascending:true }).order("name");
+  if (companyId) query = query.eq("company_id", companyId);
+  const { data, error } = await query;
+  if (error) {
+    if (["42P01","PGRST205"].includes(error.code ?? "")) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? []).map(mapContractRow);
+}
+
+export async function getContract(id:string): Promise<Contract | null> {
+  if (demoMode) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("contracts").select(CONTRACT_SELECT).eq("id",id).single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
+  return mapContractRow(data);
+}
+
+export async function getContractFormOptions() {
+  if (demoMode) return { companies: demoCompanies.map(c=>({id:c.id,name:c.name})), projects: demoProjects.map(p=>({id:p.id,companyId:p.companyId ?? "",name:p.name})) };
+  const supabase = await createClient();
+  const [companiesResult, projectsResult] = await Promise.all([
+    supabase.from("companies").select("id,name").eq("is_archived",false).order("name"),
+    supabase.from("projects").select("id,company_id,name").eq("is_archived",false).order("name")
+  ]);
+  if (companiesResult.error) throw new Error(companiesResult.error.message);
+  if (projectsResult.error) throw new Error(projectsResult.error.message);
+  return {
+    companies: (companiesResult.data ?? []).map(x=>({id:x.id,name:x.name})),
+    projects: (projectsResult.data ?? []).map(x=>({id:x.id,companyId:x.company_id,name:x.name}))
+  };
+}
+
+export async function getContractSnapshot(): Promise<ContractSnapshot> {
+  const contracts = await getContracts();
+  const today = jstDateKeyNow();
+  const active = contracts.filter(c=>c.status === "active" && (!c.endDate || c.endDate >= today));
+  const due = active.filter(c=>c.nextBillingDate <= today);
+  const groupsMap = new Map<string, {companyId:string;companyName:string;dueContracts:Contract[];dueAmount:number}>();
+  for (const contract of due) {
+    const group = groupsMap.get(contract.companyId) ?? { companyId:contract.companyId, companyName:contract.companyName, dueContracts:[], dueAmount:0 };
+    group.dueContracts.push(contract); group.dueAmount += contract.amount; groupsMap.set(contract.companyId,group);
+  }
+  return {
+    activeCount: active.length,
+    monthlyRecurring: active.filter(c=>c.cycle === "monthly").reduce((s,c)=>s+c.amount,0),
+    annualRecurring: active.filter(c=>c.cycle === "annual").reduce((s,c)=>s+c.amount,0),
+    dueCount: due.length,
+    dueAmount: due.reduce((s,c)=>s+c.amount,0),
+    contracts,
+    billingGroups: [...groupsMap.values()].sort((a,b)=>b.dueAmount-a.dueAmount)
+  };
+}
+
+export async function getContractsForCompanyBilling(companyId:string): Promise<Contract[]> {
+  const contracts = await getContracts(companyId);
+  return contracts.filter(c=>c.status === "active");
+}
+
+export async function getContractInvoiceLines(invoiceId:string): Promise<ContractInvoiceLine[]> {
+  if (demoMode) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("contract_invoice_lines")
+    .select("id,contract_id,project_id,description,service_period_start,service_period_end,quantity,unit,unit_price,tax_rate,amount,sort_order,contracts(name)")
+    .eq("invoice_id",invoiceId).order("sort_order");
+  if (error) {
+    if (["42P01","PGRST205"].includes(error.code ?? "")) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? []).map((row:any)=>({
+    id:row.id, contractId:row.contract_id ?? undefined, contractName:row.contracts?.name ?? undefined,
+    projectId:row.project_id ?? undefined, description:row.description, servicePeriodStart:row.service_period_start ?? undefined,
+    servicePeriodEnd:row.service_period_end ?? undefined, quantity:Number(row.quantity ?? 1), unit:row.unit ?? "式",
+    unitPrice:Number(row.unit_price ?? 0), taxRate:Number(row.tax_rate ?? 0), amount:Number(row.amount ?? 0), sortOrder:Number(row.sort_order ?? 0)
+  }));
 }

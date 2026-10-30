@@ -1,0 +1,11 @@
+import Link from "next/link";
+import MetricCard from "@/components/MetricCard";
+import { getContractSnapshot } from "@/lib/data";
+function yen(v:number){return `${Math.round(v).toLocaleString("ja-JP")}円`;}
+const statusLabel:Record<string,string>={draft:"準備中",active:"契約中",paused:"一時停止",ended:"終了"};
+export default async function ContractsPage(){const s=await getContractSnapshot();return <>
+ <div className="page-head"><div><h1>契約管理</h1><p className="muted">Webサイト保守・運用などの月契約・年間契約と次回請求を管理します。</p></div><Link className="button primary" href="/contracts/new">＋ 契約</Link></div>
+ <div className="grid-4"><MetricCard label="契約中" value={`${s.activeCount}件`}/><MetricCard label="月額契約" value={yen(s.monthlyRecurring)} note="1か月あたり"/><MetricCard label="年間契約" value={yen(s.annualRecurring)} note="1年あたり"/><MetricCard label="請求時期到来" value={`${s.dueCount}件`} note={yen(s.dueAmount)}/></div>
+ {s.billingGroups.length>0&&<section className="card contract-due-card"><div className="card-head"><div><h2>請求時期が来ている契約</h2><div className="small muted">同一取引先の複数契約をまとめて請求できます。</div></div></div><div className="list compact-list">{s.billingGroups.map(g=><div className="list-row" key={g.companyId}><div className="grow"><div className="list-title">{g.companyName}</div><div className="small muted">{g.dueContracts.map(c=>c.name).join(" / ")}</div></div><strong>{yen(g.dueAmount)}</strong><Link className="button primary" href={`/contracts/billing/new?company_id=${g.companyId}`}>まとめて請求</Link></div>)}</div></section>}
+ <section className="card"><div className="card-head"><h2>契約一覧</h2><span className="badge">{s.contracts.length}件</span></div><div className="table-wrap"><table><thead><tr><th>取引先 / 契約</th><th>周期</th><th>金額</th><th>次回請求</th><th>次回期間</th><th>状態</th><th></th></tr></thead><tbody>{s.contracts.map(c=><tr key={c.id}><td><strong>{c.name}</strong><div className="small muted">{c.companyName}{c.projectName?` / ${c.projectName}`:""}</div></td><td>{c.cycle==="annual"?"年間":"月"}</td><td><strong>{yen(c.amount)}</strong></td><td>{c.nextBillingDate}</td><td>{c.nextPeriodStart}</td><td><span className={`badge ${c.status==="active"?"green":""}`}>{statusLabel[c.status]}</span></td><td><Link className="icon-button edit" href={`/contracts/${c.id}/edit`}>✎</Link></td></tr>)}</tbody></table></div>{!s.contracts.length&&<div className="empty">契約はまだありません。</div>}</section>
+ </>}

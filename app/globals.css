@@ -677,3 +677,16 @@ button.task-check.done { background:var(--success); }
   .project-command-bar .button { padding:9px 7px; font-size:12px; }
   .project-overview-grid { gap:12px; margin-top:12px; }
 }
+
+/* Ver.3.1 契約管理 */
+.contract-due-card { margin-bottom: 18px; }
+.contract-check-list { border:1px solid var(--line,#dbe3ef); border-radius:14px; overflow:hidden; background:#fff; }
+.contract-check-row { display:flex; gap:14px; align-items:center; padding:16px 18px; border-bottom:1px solid var(--line,#dbe3ef); cursor:pointer; }
+.contract-check-row:last-child { border-bottom:0; }
+.contract-check-row input { width:18px; height:18px; flex:0 0 auto; }
+.contract-form .check-row { display:flex; gap:10px; align-items:center; padding:10px 0; }
+.contract-form .check-row input { width:18px; height:18px; }
+@media (max-width: 720px) {
+  .contract-check-row { align-items:flex-start; padding:14px; }
+  .contract-check-row > strong { white-space:nowrap; }
+}

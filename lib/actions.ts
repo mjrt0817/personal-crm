@@ -1051,13 +1051,13 @@ async function issueInvoiceRecord(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   id: string,
-  projectId: string,
+  projectId: string | null,
   currentReference?: string | null,
   invoiceDate?: string | null
 ) {
   const { data, error } = await supabase.from("project_invoices")
     .select("company_id,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot,issued_snapshot_at")
-    .eq("id", id).eq("project_id", projectId).single();
+    .eq("id", id).single();
   if (error) throw new Error(error.message);
   const update: Record<string, unknown> = { status: "invoiced", invoice_date: invoiceDate || todayJstDate() };
   if (!currentReference) update.reference_no = await allocateInvoiceReference(supabase, userId);
@@ -1076,7 +1076,7 @@ async function issueInvoiceRecord(
     update.issued_snapshot_at = snapshots.issued_snapshot_at;
   }
 
-  const { error: updateError } = await supabase.from("project_invoices").update(update).eq("id", id).eq("project_id", projectId);
+  const { error: updateError } = await supabase.from("project_invoices").update(update).eq("id", id);
   if (updateError) throw new Error(updateError.message);
 }
 
@@ -1242,51 +1242,232 @@ export async function updateProjectInvoice(formData: FormData) {
 
 export async function advanceInvoiceStatus(formData: FormData) {
   const id = required(formData, "id", "請求ID");
-  const projectId = required(formData, "project_id", "案件ID");
-  if (demoMode) demoReturn(formData, returnTarget(formData, `/projects/${projectId}?tab=billing`));
+  const projectId = optional(formData, "project_id");
+  const fallback = projectId ? `/projects/${projectId}?tab=billing` : "/billing";
+  if (demoMode) demoReturn(formData, returnTarget(formData, fallback));
   const { supabase, userId } = await authed();
-  const { data, error } = await supabase.from("project_invoices").select("status,invoice_date,paid_date,reference_no").eq("id", id).single();
+  const { data, error } = await supabase.from("project_invoices").select("status,invoice_date,paid_date,reference_no,project_id").eq("id", id).single();
   if (error) throw new Error(error.message);
+  const actualProjectId = data.project_id ?? projectId ?? null;
   const today = todayJstDate();
   if (data.status === "planned") {
-    await issueInvoiceRecord(supabase, userId, id, projectId, data.reference_no, data.invoice_date || today);
+    await issueInvoiceRecord(supabase, userId, id, actualProjectId, data.reference_no, data.invoice_date || today);
   } else if (data.status === "invoiced") {
-    if (!data.reference_no) await issueInvoiceRecord(supabase, userId, id, projectId, data.reference_no, data.invoice_date || today);
+    if (!data.reference_no) await issueInvoiceRecord(supabase, userId, id, actualProjectId, data.reference_no, data.invoice_date || today);
     const { error: updateError } = await supabase.from("project_invoices").update({ status: "paid", paid_date: data.paid_date || today }).eq("id", id);
     if (updateError) throw new Error(updateError.message);
   } else {
-    redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
+    redirect(returnTarget(formData, fallback));
   }
-  invalidateBillingMutation(projectId);
-  redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
+  invalidateBillingMutation(actualProjectId);
+  revalidatePath("/contracts");
+  redirect(returnTarget(formData, fallback));
+}
+
+
+function addContractCycle(dateKey:string, cycle:"monthly"|"annual", direction=1) {
+  const [y,m,d] = dateKey.split("-").map(Number);
+  if (cycle === "annual") {
+    const targetY = y + direction;
+    const lastDay = new Date(Date.UTC(targetY, m, 0)).getUTCDate();
+    return `${targetY}-${String(m).padStart(2,"0")}-${String(Math.min(d,lastDay)).padStart(2,"0")}`;
+  }
+  const monthIndex = (y * 12 + (m - 1)) + direction;
+  const targetY = Math.floor(monthIndex / 12);
+  const targetM0 = ((monthIndex % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(targetY, targetM0 + 1, 0)).getUTCDate();
+  return `${targetY}-${String(targetM0+1).padStart(2,"0")}-${String(Math.min(d,lastDay)).padStart(2,"0")}`;
+}
+
+function periodEndFromStart(start:string, cycle:"monthly"|"annual") {
+  const next = addContractCycle(start, cycle, 1);
+  const d = new Date(`${next}T00:00:00Z`); d.setUTCDate(d.getUTCDate()-1);
+  return d.toISOString().slice(0,10);
+}
+
+async function rollbackContractInvoiceCycle(supabase: Awaited<ReturnType<typeof createClient>>, invoiceId:string) {
+  const { data: lines, error } = await supabase.from("contract_invoice_lines")
+    .select("contract_id,service_period_start,contracts(id,status,cycle,next_period_start,next_billing_date)")
+    .eq("invoice_id",invoiceId).not("contract_id","is",null);
+  if (error && !["42P01","PGRST205"].includes(error.code ?? "")) throw new Error(error.message);
+  for (const row of lines ?? []) {
+    const c:any = row.contracts;
+    if (!c || !row.service_period_start) continue;
+    const expectedNext = addContractCycle(row.service_period_start, c.cycle, 1);
+    if (c.next_period_start !== expectedNext) continue;
+    const previousBilling = addContractCycle(c.next_billing_date, c.cycle, -1);
+    await supabase.from("contracts").update({ next_period_start: row.service_period_start, next_billing_date: previousBilling, status: c.status === "ended" ? "active" : c.status }).eq("id",c.id);
+  }
 }
 
 export async function cancelProjectInvoice(formData: FormData) {
   const id = required(formData, "id", "請求ID");
-  const projectId = required(formData, "project_id", "案件ID");
-  if (demoMode) demoReturn(formData, returnTarget(formData, `/projects/${projectId}?tab=billing`));
+  const projectId = optional(formData, "project_id");
+  const fallback = projectId ? `/projects/${projectId}?tab=billing` : "/billing";
+  if (demoMode) demoReturn(formData, returnTarget(formData, fallback));
   const { supabase } = await authed();
-  const { error } = await supabase.from("project_invoices").update({ status: "cancelled" }).eq("id", id).eq("project_id", projectId);
+  const { data: current, error: currentError } = await supabase.from("project_invoices").select("status,source_type,project_id").eq("id",id).single();
+  if (currentError) throw new Error(currentError.message);
+  const { error } = await supabase.from("project_invoices").update({ status: "cancelled" }).eq("id", id);
   if (error) throw new Error(error.message);
-  invalidateBillingMutation(projectId);
-  redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
+  if (current.source_type === "contracts") await rollbackContractInvoiceCycle(supabase,id);
+  invalidateBillingMutation(current.project_id ?? projectId);
+  revalidatePath("/contracts");
+  redirect(returnTarget(formData, fallback));
 }
 
 export async function deleteProjectInvoice(formData: FormData) {
   const id = required(formData, "id", "請求ID");
-  const projectId = required(formData, "project_id", "案件ID");
-  if (demoMode) demoReturn(formData, returnTarget(formData, `/projects/${projectId}?tab=billing`));
+  const projectId = optional(formData, "project_id");
+  const fallback = projectId ? `/projects/${projectId}?tab=billing` : "/billing";
+  if (demoMode) demoReturn(formData, returnTarget(formData, fallback));
   const { supabase } = await authed();
   const { data: current, error: currentError } = await supabase.from("project_invoices")
-    .select("issued_snapshot_at")
-    .eq("id", id).eq("project_id", projectId).single();
+    .select("issued_snapshot_at,source_type,project_id").eq("id", id).single();
   if (currentError) throw new Error(currentError.message);
   if (current.issued_snapshot_at) throw new Error("発行済み請求書は削除できません。必要な場合は取消として履歴を残してください。");
-  const { error } = await supabase.from("project_invoices").delete().eq("id", id).eq("project_id", projectId);
+  if (current.source_type === "contracts") await rollbackContractInvoiceCycle(supabase,id);
+  const { error } = await supabase.from("project_invoices").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  invalidateBillingMutation(projectId);
-  redirect(returnTarget(formData, `/projects/${projectId}?tab=billing`));
+  invalidateBillingMutation(current.project_id ?? projectId);
+  revalidatePath("/contracts");
+  redirect(returnTarget(formData, fallback));
 }
+
+export async function createContract(formData: FormData) {
+  if (demoMode) demoReturn(formData, "/contracts");
+  const { supabase, userId } = await authed();
+  const companyId = required(formData,"company_id","取引先");
+  const projectId = optional(formData,"project_id");
+  if (projectId) {
+    const { data:p,error } = await supabase.from("projects").select("company_id").eq("id",projectId).single();
+    if (error || p.company_id !== companyId) throw new Error("契約に紐付ける案件が取引先と一致していません。");
+  }
+  const startDate = required(formData,"start_date","契約開始日");
+  const cycle = text(formData,"cycle") === "annual" ? "annual" : "monthly";
+  const amount = numberOrNull(formData,"amount");
+  if (amount == null) throw new Error("契約金額は必須です。");
+  const payload = {
+    user_id:userId, company_id:companyId, project_id:projectId, name:required(formData,"name","契約名"),
+    status:["draft","active","paused","ended"].includes(text(formData,"status")) ? text(formData,"status") : "active",
+    cycle, amount, tax_rate:Math.max(0,Math.min(100,numberOrNull(formData,"tax_rate") ?? 10)),
+    billing_timing:text(formData,"billing_timing") === "postpaid" ? "postpaid" : "prepaid",
+    start_date:startDate, end_date:optional(formData,"end_date"), auto_renew:checkbox(formData,"auto_renew"),
+    next_period_start:optional(formData,"next_period_start") || startDate,
+    next_billing_date:optional(formData,"next_billing_date") || startDate,
+    memo:optional(formData,"memo")
+  };
+  const { error } = await supabase.from("contracts").insert(payload);
+  if (error) throw new Error(error.message);
+  revalidatePath("/contracts"); revalidatePath(`/companies/${companyId}`); revalidatePath("/billing");
+  redirect(`/contracts?created=1`);
+}
+
+export async function updateContract(formData: FormData) {
+  const id = required(formData,"id","契約ID");
+  if (demoMode) demoReturn(formData,`/contracts/${id}/edit`);
+  const { supabase } = await authed();
+  const companyId = required(formData,"company_id","取引先");
+  const projectId = optional(formData,"project_id");
+  if (projectId) {
+    const { data:p,error } = await supabase.from("projects").select("company_id").eq("id",projectId).single();
+    if (error || p.company_id !== companyId) throw new Error("契約に紐付ける案件が取引先と一致していません。");
+  }
+  const amount = numberOrNull(formData,"amount"); if (amount == null) throw new Error("契約金額は必須です。");
+  const { error } = await supabase.from("contracts").update({
+    company_id:companyId, project_id:projectId, name:required(formData,"name","契約名"),
+    status:["draft","active","paused","ended"].includes(text(formData,"status")) ? text(formData,"status") : "active",
+    cycle:text(formData,"cycle") === "annual" ? "annual" : "monthly", amount,
+    tax_rate:Math.max(0,Math.min(100,numberOrNull(formData,"tax_rate") ?? 10)),
+    billing_timing:text(formData,"billing_timing") === "postpaid" ? "postpaid" : "prepaid",
+    start_date:required(formData,"start_date","契約開始日"), end_date:optional(formData,"end_date"), auto_renew:checkbox(formData,"auto_renew"),
+    next_period_start:required(formData,"next_period_start","次回サービス期間開始日"),
+    next_billing_date:required(formData,"next_billing_date","次回請求予定日"), memo:optional(formData,"memo")
+  }).eq("id",id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/contracts"); revalidatePath(`/contracts/${id}/edit`); revalidatePath(`/companies/${companyId}`); revalidatePath("/billing");
+  redirect(`/contracts?updated=1`);
+}
+
+export async function createContractInvoice(formData: FormData) {
+  const ids = formData.getAll("contract_id").filter((v):v is string=>typeof v === "string" && Boolean(v));
+  if (!ids.length) throw new Error("請求する契約を1件以上選択してください。");
+  const companyId = required(formData,"company_id","取引先ID");
+  if (demoMode) demoReturn(formData,"/billing");
+  const { supabase, userId } = await authed();
+  const { data: rows, error } = await supabase.from("contracts")
+    .select("id,company_id,project_id,name,status,cycle,amount,tax_rate,billing_timing,next_period_start,next_billing_date,end_date,companies(name,postal_code,address)")
+    .in("id",ids).eq("company_id",companyId);
+  if (error) throw new Error(error.message);
+  if ((rows ?? []).length !== ids.length) throw new Error("契約情報を取得できませんでした。");
+  if ((rows ?? []).some((c:any)=>c.status !== "active")) throw new Error("有効な契約のみ請求できます。");
+  const contracts:any[] = rows ?? [];
+  const projects = [...new Set(contracts.map(c=>c.project_id).filter(Boolean))];
+  const representativeProject = projects.length === 1 ? projects[0] : null;
+  const total = contracts.reduce((sum,c)=>sum+Number(c.amount ?? 0),0);
+  const today = todayJstDate();
+  const scheduledDate = [...contracts.map(c=>c.next_billing_date)].sort()[0] ?? today;
+  const dueDates = contracts.map(c=>c.billing_timing === "prepaid" ? c.next_period_start : (()=>{const e=periodEndFromStart(c.next_period_start,c.cycle);const d=new Date(`${e}T00:00:00Z`);d.setUTCDate(d.getUTCDate()+30);return d.toISOString().slice(0,10);})());
+  const dueDate = dueDates.sort()[0] ?? today;
+  const company:any = contracts[0].companies;
+  const title = optional(formData,"title") || `${scheduledDate.slice(0,7).replace("-","年")}月 保守・運用費`;
+  const { data: invoice, error: invoiceError } = await supabase.from("project_invoices").insert({
+    user_id:userId, project_id:representativeProject, company_id:companyId, title, source_type:"contracts", status:"planned",
+    amount:total, scheduled_invoice_date:scheduledDate, due_date:dueDate, tax_rate:0,
+    billing_name:optional(formData,"billing_name") || company?.name || null,
+    billing_postal_code:optional(formData,"billing_postal_code") || company?.postal_code || null,
+    billing_address:optional(formData,"billing_address") || company?.address || null,
+    line_description:`${contracts.length}契約分`, memo:optional(formData,"memo")
+  }).select("id").single();
+  if (invoiceError) throw new Error(invoiceError.message);
+  const lines = contracts.map((c,index)=>{
+    const start=c.next_period_start; const end=periodEndFromStart(start,c.cycle);
+    return { user_id:userId, invoice_id:invoice.id, contract_id:c.id, project_id:c.project_id,
+      description:`${c.name}（${start.replaceAll("-","/")}〜${end.replaceAll("-","/")}）`, service_period_start:start, service_period_end:end,
+      quantity:1, unit:"式", unit_price:Number(c.amount), tax_rate:Number(c.tax_rate), amount:Number(c.amount), sort_order:index };
+  });
+  const { error: lineError } = await supabase.from("contract_invoice_lines").insert(lines);
+  if (lineError) { await supabase.from("project_invoices").delete().eq("id",invoice.id); throw new Error(lineError.message); }
+  for (const c of contracts) {
+    const nextPeriod = addContractCycle(c.next_period_start,c.cycle,1);
+    const nextBilling = addContractCycle(c.next_billing_date,c.cycle,1);
+    const update:any = { next_period_start:nextPeriod, next_billing_date:nextBilling };
+    if (c.end_date && nextPeriod > c.end_date) update.status = "ended";
+    await supabase.from("contracts").update(update).eq("id",c.id);
+  }
+  revalidatePath("/contracts"); revalidatePath("/billing"); revalidatePath(`/companies/${companyId}`);
+  redirect(`/billing/${invoice.id}/edit`);
+}
+
+export async function updateContractInvoice(formData: FormData) {
+  const id=required(formData,"id","請求ID");
+  if (demoMode) demoReturn(formData,"/billing");
+  const { supabase,userId }=await authed();
+  const { data:current,error:currentError }=await supabase.from("project_invoices").select("status,reference_no,invoice_date,paid_date,issued_snapshot_at,project_id,amount,source_type").eq("id",id).single();
+  if(currentError) throw new Error(currentError.message);
+  const requested=["planned","invoiced","paid","cancelled"].includes(text(formData,"status"))?text(formData,"status"):"planned";
+  const today=todayJstDate();
+  if(current.issued_snapshot_at){
+    let next=current.status;
+    if(current.status==="invoiced"&&["invoiced","paid","cancelled"].includes(requested)) next=requested;
+    else if(current.status==="paid"&&["paid","cancelled"].includes(requested)) next=requested;
+    const update:any={status:next}; if(next==="paid")update.paid_date=optional(formData,"paid_date")||current.paid_date||today;
+    const {error}=await supabase.from("project_invoices").update(update).eq("id",id); if(error)throw new Error(error.message);
+    if(next === "cancelled" && current.source_type === "contracts") await rollbackContractInvoiceCycle(supabase,id);
+    invalidateBillingMutation(current.project_id); revalidatePath("/contracts"); redirect("/billing");
+  }
+  const { error }=await supabase.from("project_invoices").update({
+    title:required(formData,"title","請求名"), status:requested==="paid"?"invoiced":requested,
+    scheduled_invoice_date:optional(formData,"scheduled_invoice_date"), invoice_date:optional(formData,"invoice_date")||(["invoiced","paid"].includes(requested)?today:null),
+    due_date:optional(formData,"due_date"), paid_date:optional(formData,"paid_date")||(requested==="paid"?today:null), reference_no:optional(formData,"reference_no")||current.reference_no,
+    billing_name:optional(formData,"billing_name"), billing_postal_code:optional(formData,"billing_postal_code"), billing_address:optional(formData,"billing_address"), memo:optional(formData,"memo")
+  }).eq("id",id); if(error)throw new Error(error.message);
+  if(requested === "cancelled" && current.source_type === "contracts") { await rollbackContractInvoiceCycle(supabase,id); invalidateBillingMutation(current.project_id); revalidatePath("/contracts"); redirect("/billing"); }
+  if(["invoiced","paid"].includes(requested)) await issueInvoiceRecord(supabase,userId,id,current.project_id,optional(formData,"reference_no")||current.reference_no,optional(formData,"invoice_date")||current.invoice_date);
+  if(requested==="paid") await supabase.from("project_invoices").update({status:"paid",paid_date:optional(formData,"paid_date")||today}).eq("id",id);
+  invalidateBillingMutation(current.project_id); revalidatePath("/contracts"); redirect("/billing");
+}
+
 
 function formValues(formData: FormData, name: string) {
   return formData.getAll(name).map((v) => typeof v === "string" ? v.trim() : "");
