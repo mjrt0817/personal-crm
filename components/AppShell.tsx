@@ -17,6 +17,7 @@ const navSections = [
       ["🧾", "見積", "/estimates"],
       ["📊", "売上・見込", "/pipeline"],
       ["💴", "請求・入金", "/billing"],
+      ["📃", "契約管理", "/contracts"],
       ["🏢", "取引先", "/companies"],
     ],
   },
