@@ -68,6 +68,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <a className="button soft" href="/api/export/csv/estimates">見積CSV</a>
             </div>
           </div>
+          <div className="form-section inset-section" style={{ marginTop: 20 }}>
+            <h3>会計ソフト連携用 共通データ</h3>
+            <p className="small muted">請求書発行と入金確認をイベント単位でCSV出力します。freee・マネーフォワード双方に転用できる中間データです。仕訳CSVではないため、そのまま会計ソフトに取り込まないでください。</p>
+            <p className="small muted">売上計上時期・税区分・前受金・売掛金・入金口座は会計ソフト側で確認します。過年度分の入金を含む場合は年ごとに出力し、同じ請求IDの重複取込に注意してください。</p>
+            <div className="row-actions" style={{ flexWrap: "wrap" }}>
+              <a className="button soft" href={`/api/export/accounting?year=${new Date().getFullYear()}`}>今年の会計連携CSV</a>
+              <a className="button soft" href={`/api/export/accounting?year=${new Date().getFullYear()-1}`}>前年の会計連携CSV</a>
+            </div>
+          </div>
           <p className="small muted" style={{ marginTop: 14 }}>Ver.2.3では安全性を優先し、バックアップからの自動復元は実装していません。復元が必要な場合はバックアップJSONを元に確認してから行います。</p>
         </div>
       </section>
