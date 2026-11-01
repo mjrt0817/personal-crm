@@ -1177,17 +1177,6 @@ export async function updateProjectInvoice(formData: FormData) {
     .select("status,reference_no,invoice_date,paid_date,issued_snapshot_at")
     .eq("id", id).eq("project_id", projectId).single();
   if (currentError) throw new Error(currentError.message);
-  if ((current.status === "sent" || current.status === "expired") && current.valid_until && current.valid_until < todayJstDate() && status !== "expired") {
-    throw new Error("期限切れの送付済見積は再有効化できません。コピーして新しい見積を作成してください。");
-  }
-  const targetValidUntil = optional(formData, "valid_until");
-  if (targetValidUntil && targetValidUntil < todayJstDate() && ["sent", "accepted"].includes(status)) {
-    throw new Error("有効期限を過ぎた見積を送付済・採用にすることはできません。");
-  }
-  if (current && current.valid_until && current.valid_until < todayJstDate() && ["draft","sent","expired"].includes(current.status) && status === "accepted") {
-    throw new Error("期限切れの見積は直接採用できません。コピーして新規見積を作成してください。");
-  }
-
   // 一度発行した請求書は帳票内容を固定する。
   // 以後は入金状況（請求済→入金済）または取消だけを更新できる。
   if (current.issued_snapshot_at) {
