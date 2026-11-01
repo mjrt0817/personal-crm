@@ -1339,6 +1339,13 @@ function mapEstimateItem(row: any): EstimateItem {
   };
 }
 
+function effectiveEstimateStatus(row: any): EstimateStatus {
+  // Calendar dates are compared in Japan local time; valid_until is inclusive.
+  const today = new Intl.DateTimeFormat("sv-SE", {timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  if ((row.status === "draft" || row.status === "sent") && row.valid_until && row.valid_until < today) return "expired";
+  return row.status as EstimateStatus;
+}
+
 function mapEstimateRow(row: any, items: EstimateItem[] = []): Estimate {
   return {
     id: row.id,
@@ -1350,7 +1357,7 @@ function mapEstimateRow(row: any, items: EstimateItem[] = []): Estimate {
     projectName: row.projects?.name ?? undefined,
     estimateNo: row.estimate_no,
     title: row.title,
-    status: row.status as EstimateStatus,
+    status: effectiveEstimateStatus(row),
     issueDate: row.issue_date,
     validUntil: row.valid_until ?? undefined,
     acceptedDate: row.accepted_date ?? undefined,

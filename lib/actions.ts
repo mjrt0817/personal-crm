@@ -1177,6 +1177,16 @@ export async function updateProjectInvoice(formData: FormData) {
     .select("status,reference_no,invoice_date,paid_date,issued_snapshot_at")
     .eq("id", id).eq("project_id", projectId).single();
   if (currentError) throw new Error(currentError.message);
+  if ((current.status === "sent" || current.status === "expired") && current.valid_until && current.valid_until < todayJstDate() && status !== "expired") {
+    throw new Error("期限切れの送付済見積は再有効化できません。コピーして新しい見積を作成してください。");
+  }
+  const targetValidUntil = optional(formData, "valid_until");
+  if (targetValidUntil && targetValidUntil < todayJstDate() && ["sent", "accepted"].includes(status)) {
+    throw new Error("有効期限を過ぎた見積を送付済・採用にすることはできません。");
+  }
+  if (current && current.valid_until && current.valid_until < todayJstDate() && ["draft","sent","expired"].includes(current.status) && status === "accepted") {
+    throw new Error("期限切れの見積は直接採用できません。コピーして新規見積を作成してください。");
+  }
 
   // 一度発行した請求書は帳票内容を固定する。
   // 以後は入金状況（請求済→入金済）または取消だけを更新できる。
@@ -1574,6 +1584,53 @@ function invalidateEstimateMutation(projectId?: string | null) {
   if (projectId) revalidatePath(`/projects/${projectId}`);
 }
 
+// A copy always receives a fresh estimate number and stays in draft.
+export async function duplicateEstimate(formData: FormData) {
+  const id = required(formData, "id", "見積ID");
+  if (demoMode) demoReturn(formData, "/estimates");
+  const { supabase, userId } = await authed();
+  const { data: source, error } = await supabase.from("estimates")
+    .select("company_id,contact_id,project_id,title,issue_date,valid_until,billing_name,billing_postal_code,billing_address,memo,terms,subtotal,tax_amount,total_amount")
+    .eq("id", id).eq("user_id", userId).single();
+  if (error || !source) throw new Error(error?.message || "コピー元が見つかりません。");
+  const { data: sourceItems, error: itemError } = await supabase.from("estimate_items")
+    .select("description,quantity,unit,unit_price,tax_rate,line_subtotal,tax_amount,sort_order")
+    .eq("estimate_id",id).eq("user_id",userId).order("sort_order");
+  if (itemError) throw new Error(itemError.message);
+  if (!sourceItems?.length) throw new Error("明細がない見積はコピーできません。");
+  const settings = await getInvoiceSettingsForEstimateCopy(supabase, userId);
+  const issueDate = todayJstDate();
+  const validUntil = new Date(`${issueDate}T12:00:00+09:00`);
+  validUntil.setUTCDate(validUntil.getUTCDate() + settings.validDays);
+  const newValidUntil = new Intl.DateTimeFormat("sv-SE", {timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).format(validUntil);
+  const estimateNo = await allocateEstimateReference(supabase, userId);
+  const {data: created, error: createError} = await supabase.from("estimates").insert({
+    user_id:userId,company_id:source.company_id,contact_id:source.contact_id,project_id:source.project_id,
+    estimate_no:estimateNo,title:`${source.title}（コピー）`,status:"draft",issue_date:issueDate,valid_until:newValidUntil,
+    accepted_date:null,billing_name:source.billing_name,billing_postal_code:source.billing_postal_code,
+    billing_address:source.billing_address,memo:source.memo,terms:source.terms,
+    subtotal:source.subtotal,tax_amount:source.tax_amount,total_amount:source.total_amount,
+    issuer_snapshot:null,customer_snapshot:null,issued_snapshot_at:null
+  }).select("id").single();
+  if (createError || !created) throw new Error(createError?.message || "見積のコピーに失敗しました。");
+  const {error: copiedItemsError} = await supabase.from("estimate_items").insert(sourceItems.map(item=>({
+    ...item,user_id:userId,estimate_id:created.id
+  })));
+  if (copiedItemsError) {
+    await supabase.from("estimates").delete().eq("id",created.id).eq("user_id",userId);
+    throw new Error(copiedItemsError.message);
+  }
+  invalidateEstimateMutation(source.project_id);
+  redirect(`/estimates/${created.id}/edit`);
+}
+
+async function getInvoiceSettingsForEstimateCopy(supabase: Awaited<ReturnType<typeof authed>>["supabase"],userId:string) {
+  const {data,error} = await supabase.from("invoice_settings")
+    .select("default_estimate_valid_days").eq("user_id",userId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return {validDays:Math.max(1,Number(data?.default_estimate_valid_days ?? 30))};
+}
+
 export async function createEstimate(formData: FormData) {
   if (demoMode) demoReturn(formData, "/estimates");
   const { supabase, userId } = await authed();
@@ -1585,6 +1642,10 @@ export async function createEstimate(formData: FormData) {
   const taxAmount = items.reduce((sum, x) => sum + x.tax_amount, 0);
   const statusRaw = text(formData, "status");
   const status = ["draft","sent","accepted","rejected","expired"].includes(statusRaw) ? statusRaw : "draft";
+  const targetValidUntil = optional(formData, "valid_until");
+  if (targetValidUntil && targetValidUntil < todayJstDate() && ["sent", "accepted"].includes(status)) {
+    throw new Error("有効期限を過ぎた見積を送付済・採用にすることはできません。");
+  }
   const estimateNo = await allocateEstimateReference(supabase, userId);
   const payload: Record<string, unknown> = {
     user_id: userId,
@@ -1634,7 +1695,7 @@ export async function updateEstimate(formData: FormData) {
   const taxAmount = items.reduce((sum, x) => sum + x.tax_amount, 0);
   const statusRaw = text(formData, "status");
   const status = ["draft","sent","accepted","rejected","expired"].includes(statusRaw) ? statusRaw : "draft";
-  const { data: current, error: currentError } = await supabase.from("estimates").select("issuer_snapshot,customer_snapshot").eq("id", id).single();
+  const { data: current, error: currentError } = await supabase.from("estimates").select("issuer_snapshot,customer_snapshot,status,valid_until").eq("id", id).single();
   if (currentError) throw new Error(currentError.message);
   const payload: Record<string, unknown> = {
     company_id: companyId,
@@ -1709,6 +1770,13 @@ export async function acceptEstimateAndApplyProject(formData: FormData) {
   const { supabase, userId } = await authed();
   const { data: estimate, error } = await supabase.from("estimates").select("id,estimate_no,company_id,contact_id,project_id,title,total_amount,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot").eq("id", id).single();
   if (error) throw new Error(error.message);
+  const {data: validity, error: validityError} = await supabase.from("estimates")
+    .select("status,valid_until").eq("id",id).eq("user_id",userId).single();
+  if (validityError) throw new Error(validityError.message);
+  if ((validity.status === "draft" || validity.status === "sent" || validity.status === "expired") && validity.valid_until && validity.valid_until < todayJstDate()) {
+    throw new Error("有効期限が過ぎた見積は採用できません。見積をコピーして新たに発行してください。");
+  }
+  if (validity.status === "rejected" || validity.status === "expired") throw new Error("不採用・期限切れの見積は採用できません。");
   const { data: itemRows, error: itemError } = await supabase.from("estimate_items").select("description,quantity,unit,unit_price,tax_rate,line_subtotal,tax_amount").eq("estimate_id", id).order("sort_order");
   if (itemError) throw new Error(itemError.message);
   const pricing = estimateProjectPricing(itemRows ?? [], Number(estimate.total_amount ?? 0), true);
