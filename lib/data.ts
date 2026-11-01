@@ -1432,7 +1432,9 @@ export async function getEstimateDocumentData(id: string): Promise<EstimateDocum
   const estimate = await getEstimateDetail(id);
   if (!estimate) return null;
   const [company, settings] = await Promise.all([getCompanyBase(estimate.companyId), getInvoiceSettings()]);
-  const issuer: InvoicePartySnapshot = estimate.issuerSnapshot ?? {
+  // 下書きは最新の設定を使う。送付済み・採用済みなどは発行時情報を保持する。
+  // 下書き作成時にスナップショットが保存済みでも優先しない。
+  const currentIssuer: InvoicePartySnapshot = {
     name: settings.issuerName,
     tradeName: settings.issuerTradeName,
     personName: settings.issuerPersonName,
@@ -1442,6 +1444,9 @@ export async function getEstimateDocumentData(id: string): Promise<EstimateDocum
     email: settings.issuerEmail,
     registrationNumber: settings.registrationNumber
   };
+  const issuer: InvoicePartySnapshot = estimate.status === "draft"
+    ? currentIssuer
+    : (estimate.issuerSnapshot ?? currentIssuer);
   const customer: InvoicePartySnapshot = estimate.customerSnapshot ?? {
     name: estimate.billingName ?? company?.name,
     postalCode: estimate.billingPostalCode ?? company?.postalCode,
