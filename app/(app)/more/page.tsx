@@ -1,6 +1,7 @@
 import Link from "next/link";
 const items=[
   ["🧮","経費・領収書","/expenses","経費入力・Drive保存・簡易PL/BS"],
+  ["📈","簡易PL・BS","/finance","管理用の損益・残高・仕訳入力"],
   ["🧾","見積","/estimates","見積書の作成・案件化"],
   ["📊","売上・見込","/pipeline","商談・受注・売上パイプライン"],
   ["💴","請求・入金","/billing","請求予定・入金・期限超過"],

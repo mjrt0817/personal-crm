@@ -22,6 +22,13 @@ const navSections = [
     ],
   },
   {
+    label: "経費・会計",
+    items: [
+      ["🧮", "経費・領収書", "/expenses"],
+      ["📈", "簡易PL・BS", "/finance"],
+    ],
+  },
+  {
     label: "補助機能",
     items: [["🤖", "AI参謀", "/assistant"]],
   },
