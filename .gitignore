@@ -4,3 +4,4 @@ node_modules/
 .npm-cache/
 .env*
 *.tsbuildinfo
+.ui-preview/
