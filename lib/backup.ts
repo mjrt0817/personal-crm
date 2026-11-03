@@ -1,6 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 
 export const BACKUP_TABLES = [
+  "expenses",
+  "finance_entries",
+  "expense_receipts",
   "companies",
   "contacts",
   "project_categories",
@@ -29,11 +32,16 @@ export async function getBackupPayload() {
   if (authError || !userId) throw new Error("ログインが必要です。");
 
   const entries = await Promise.all(BACKUP_TABLES.map(async (table) => {
-    const result = await supabase.from(table).select("*");
-    // 旧migration環境でもバックアップ画面全体を壊さない。
-    if (result.error && ["42P01", "PGRST205"].includes(result.error.code ?? "")) return [table, []] as const;
-    if (result.error) throw new Error(`${table}: ${result.error.message}`);
-    return [table, result.data ?? []] as const;
+    const rows: Record<string, unknown>[] = [];
+    for (let offset = 0; offset < 100000; offset += 500) {
+      const result = await supabase.from(table).select("*").order(table === "user_preferences" || table === "invoice_settings" ? "user_id" : "id").range(offset, offset + 499);
+      // 旧migration環境でもバックアップ画面全体を壊さない。
+      if (result.error && ["42P01", "PGRST205"].includes(result.error.code ?? "")) return [table, []] as const;
+      if (result.error) throw new Error(`${table}: ${result.error.message}`);
+      rows.push(...(result.data ?? []));
+      if ((result.data ?? []).length < 500) return [table, rows] as const;
+    }
+    throw new Error(`${table}: バックアップの件数上限を超えています。`);
   }));
 
   return {
@@ -47,7 +55,8 @@ export async function getBackupPayload() {
 
 function csvEscape(value: unknown) {
   if (value === null || value === undefined) return "";
-  const s = typeof value === "object" ? JSON.stringify(value) : String(value);
+  const raw = typeof value === "object" ? JSON.stringify(value) : String(value);
+  const s = typeof value === "string" && /^[\s]*[=+\-@]/.test(raw) ? "'" + raw : raw;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

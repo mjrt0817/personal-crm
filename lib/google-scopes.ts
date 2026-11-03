@@ -3,6 +3,7 @@ export const GOOGLE_DRIVE_METADATA_SCOPE = "https://www.googleapis.com/auth/driv
 export const GOOGLE_GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 
 export const GOOGLE_WORKSPACE_SCOPES = [
+  "https://www.googleapis.com/auth/drive.file",
   GOOGLE_CALENDAR_SCOPE,
   GOOGLE_DRIVE_METADATA_SCOPE,
   GOOGLE_GMAIL_READONLY_SCOPE
