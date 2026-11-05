@@ -1,0 +1,13 @@
+'use client';
+import { useState } from 'react';
+import { createOrderPlan } from '@/lib/order-actions';
+import { todayJst,totalItems,type OrderItem } from '@/lib/order-domain';
+import type { MfDepartment } from '@/lib/moneyforward';
+import SubmitButton from './SubmitButton';
+export default function OrderBillingForm({orderId,items,departments,remaining}:{orderId:string;items:OrderItem[];departments:MfDepartment[];remaining:number}){
+ const [lines,setLines]=useState(items);const sum=totalItems(lines);return <form action={createOrderPlan} className="card-body"><input type="hidden" name="order_id" value={orderId}/><p className="muted">請求予定を作成後、別操作でMFに請求書を作成します。分割請求では今回分の明細・数量・単価へ調整してください。請求未割当：{remaining.toLocaleString()}円</p>
+ <div className="form-grid two"><label className="field"><span>請求名</span><input name="title" required maxLength={200}/></label><label className="field"><span>MFの請求先（明示選択）</span><select name="mf_department_id" required defaultValue=""><option value="" disabled>取引先を選択</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select><small>事前にMFで取引先と請求先部署を登録してください。</small></label></div>
+ <div className="form-grid three">{[['billing_date','請求日'],['sales_date','売上計上日'],['due_date','支払期限']].map(([name,label])=><label key={name} className="field"><span>{label}</span><input name={name} type="date" required defaultValue={todayJst()}/></label>)}</div><p className="small muted">前払いの場合、売上計上日と前受金の処理をMFで確認してください。源泉徴収対象の業務はMFで税額・差引支払額を確認してください。</p>
+ {lines.map((item,index)=><div key={index} className="form-grid order-plan-items"><label className="field"><span>内容</span><input name="item_description" required value={item.description} onChange={e=>setLines(lines.map((x,i)=>i===index?{...x,description:e.target.value}:x))}/></label><label className="field"><span>数量</span><input name="item_quantity" type="number" step="0.01" min="0" value={item.quantity} onChange={e=>setLines(lines.map((x,i)=>i===index?{...x,quantity:Number(e.target.value)}:x))}/></label><label className="field"><span>単価</span><input name="item_price" type="number" step="1" min="0" value={item.unit_price} onChange={e=>setLines(lines.map((x,i)=>i===index?{...x,unit_price:Number(e.target.value)}:x))}/></label><label className="field"><span>単位</span><input name="item_unit" defaultValue={item.unit||'式'}/></label><label className="field"><span>税率</span><input name="item_rate" readOnly value={item.tax_rate}/></label></div>)}
+ <p>今回の請求予定額：<strong>{sum.toLocaleString()}円</strong>（消費税相当額を含む）</p><p className="small muted">数量を0にした行は今回の請求から除外します。受注額を超える予定は登録できません。</p><SubmitButton pendingLabel="保存中…" disabled={sum<=0||sum>remaining}>請求予定を保存</SubmitButton></form>;
+}

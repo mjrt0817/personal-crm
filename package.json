@@ -1,13 +1,13 @@
 {
   "name": "personal-crm",
-  "version": "0.3.2",
+  "version": "0.3.4",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:finance": "node --experimental-strip-types --test tests/finance*.test.mjs"
+    "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "latest",
@@ -17,12 +17,13 @@
     "react-dom": "latest"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.14",
+    "@electric-sql/pglite": "^0.5.15",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
-    "typescript": "^6.0.3"
+    "tsx": "^4.23.15",
+    "typescript": "latest"
   }
 }

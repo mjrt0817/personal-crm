@@ -6,7 +6,7 @@ import EstimatePartyFields from "@/components/EstimatePartyFields";
 import type { Estimate, EstimateFormOptions, EstimateSettings } from "@/lib/types";
 
 const statuses = [
-  ["draft","下書き"],["sent","送付済"],["accepted","採用"],["rejected","不採用"],["expired","期限切れ"]
+  ["draft","下書き"],["sent","送付済"],["rejected","不採用"],["expired","期限切れ"]
 ] as const;
 
 type EditableItem = { key:string; description:string; quantity:number; unit:string; unitPrice:number; taxRate:number };

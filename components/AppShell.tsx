@@ -15,17 +15,11 @@ const navSections = [
     label: "営業・売上",
     items: [
       ["🧾", "見積", "/estimates"],
+      ["📝", "注文・受注", "/orders"],
       ["📊", "売上・見込", "/pipeline"],
       ["💴", "請求・入金", "/billing"],
       ["📃", "契約管理", "/contracts"],
       ["🏢", "取引先", "/companies"],
-    ],
-  },
-  {
-    label: "経費・会計",
-    items: [
-      ["🧮", "経費・領収書", "/expenses"],
-      ["📈", "簡易PL・BS", "/finance"],
     ],
   },
   {

@@ -1122,6 +1122,9 @@ export async function createProjectInvoice(formData: FormData) {
   const projectId = required(formData, "project_id", "案件ID");
   if (demoMode) demoReturn(formData, `/projects/${projectId}?tab=billing`);
   const { supabase, userId } = await authed();
+  const {data: linkedOrders, error: orderCheckError} = await supabase.from("sales_orders").select("id").eq("project_id",projectId).neq("status","cancelled").limit(1);
+  if(orderCheckError && !["42P01","PGRST205"].includes(orderCheckError.code)) throw new Error(orderCheckError.message);
+  if(linkedOrders?.length) throw new Error("この案件は注文・受注管理からMFへの請求予定を作成してください。");
   const { data: project, error: projectError } = await supabase.from("projects").select("company_id").eq("id", projectId).single();
   if (projectError) throw new Error(projectError.message);
   const rawStatus = text(formData, "status");
@@ -1631,6 +1634,7 @@ export async function createEstimate(formData: FormData) {
   const taxAmount = items.reduce((sum, x) => sum + x.tax_amount, 0);
   const statusRaw = text(formData, "status");
   const status = ["draft","sent","accepted","rejected","expired"].includes(statusRaw) ? statusRaw : "draft";
+  if (status === "accepted") throw new Error("受注確定は注文・受注管理から行ってください。");
   const targetValidUntil = optional(formData, "valid_until");
   if (targetValidUntil && targetValidUntil < todayJstDate() && ["sent", "accepted"].includes(status)) {
     throw new Error("有効期限を過ぎた見積を送付済・採用にすることはできません。");
@@ -1684,6 +1688,7 @@ export async function updateEstimate(formData: FormData) {
   const taxAmount = items.reduce((sum, x) => sum + x.tax_amount, 0);
   const statusRaw = text(formData, "status");
   const status = ["draft","sent","accepted","rejected","expired"].includes(statusRaw) ? statusRaw : "draft";
+  if (status === "accepted") throw new Error("受注確定は注文・受注管理から行ってください。");
   const { data: current, error: currentError } = await supabase.from("estimates").select("issuer_snapshot,customer_snapshot,status,valid_until").eq("id", id).single();
   if (currentError) throw new Error(currentError.message);
   const payload: Record<string, unknown> = {
@@ -1730,115 +1735,9 @@ export async function deleteEstimate(formData: FormData) {
   redirect("/estimates");
 }
 
-function estimateProjectPricing(items: Array<{description:string;quantity:number;unit:string|null;unit_price:number;tax_rate:number;line_subtotal:number;tax_amount:number}>, total: number, accepted: boolean) {
-  if (items.length === 1 && items[0].quantity > 1 && items[0].unit) {
-    return {
-      pricing_model: "unit",
-      unit_label: items[0].unit,
-      unit_price: items[0].unit_price,
-      planned_units: items[0].quantity,
-      completed_units: 0,
-      expected_amount: null,
-      order_amount: null
-    };
-  }
-  return {
-    pricing_model: "fixed",
-    unit_label: "回",
-    unit_price: null,
-    planned_units: null,
-    completed_units: null,
-    expected_amount: total,
-    order_amount: accepted ? total : null
-  };
+export async function acceptEstimateAndApplyProject(_formData: FormData) {
+  throw new Error("注文書を作成し、署名済みPDFを登録して受注確定してください。");
 }
-
-export async function acceptEstimateAndApplyProject(formData: FormData) {
-  const id = required(formData, "id", "見積ID");
-  if (demoMode) demoReturn(formData, `/estimates/${id}`);
-  const { supabase, userId } = await authed();
-  const { data: estimate, error } = await supabase.from("estimates").select("id,estimate_no,company_id,contact_id,project_id,title,total_amount,billing_name,billing_postal_code,billing_address,issuer_snapshot,customer_snapshot").eq("id", id).single();
-  if (error) throw new Error(error.message);
-  const {data: validity, error: validityError} = await supabase.from("estimates")
-    .select("status,valid_until").eq("id",id).eq("user_id",userId).single();
-  if (validityError) throw new Error(validityError.message);
-  if ((validity.status === "draft" || validity.status === "sent" || validity.status === "expired") && validity.valid_until && validity.valid_until < todayJstDate()) {
-    throw new Error("有効期限が過ぎた見積は採用できません。見積をコピーして新たに発行してください。");
-  }
-  if (validity.status === "rejected" || validity.status === "expired") throw new Error("不採用・期限切れの見積は採用できません。");
-  const { data: itemRows, error: itemError } = await supabase.from("estimate_items").select("description,quantity,unit,unit_price,tax_rate,line_subtotal,tax_amount").eq("estimate_id", id).order("sort_order");
-  if (itemError) throw new Error(itemError.message);
-  const pricing = estimateProjectPricing(itemRows ?? [], Number(estimate.total_amount ?? 0), true);
-  let projectId = estimate.project_id as string | null;
-  if (projectId) {
-    const { error: updateError } = await supabase.from("projects").update({
-      company_id: estimate.company_id,
-      primary_contact_id: estimate.contact_id,
-      status: "ordered",
-      order_date: todayJstDate(),
-      ...pricing
-    }).eq("id", projectId);
-    if (updateError) throw new Error(updateError.message);
-  } else {
-    const { data: created, error: createError } = await supabase.from("projects").insert({
-      user_id: userId,
-      company_id: estimate.company_id,
-      primary_contact_id: estimate.contact_id,
-      status: "ordered",
-      priority: "medium",
-      order_date: todayJstDate(),
-      description: `見積 ${estimate.estimate_no || id} から案件化`,
-      ...pricing
-    }).select("id").single();
-    if (createError) throw new Error(createError.message);
-    projectId = created.id;
-  }
-  const estimateUpdate: Record<string, unknown> = { status: "accepted", accepted_date: todayJstDate(), project_id: projectId };
-  if (!estimate.issuer_snapshot || !estimate.customer_snapshot) Object.assign(estimateUpdate, await buildEstimateSnapshots(supabase, userId, estimate.company_id, {
-    name: estimate.billing_name,
-    postalCode: estimate.billing_postal_code,
-    address: estimate.billing_address
-  }));
-  const { error: estimateError } = await supabase.from("estimates").update(estimateUpdate).eq("id", id);
-  if (estimateError) throw new Error(estimateError.message);
-  invalidateEstimateMutation(projectId);
-  revalidatePath("/projects");
-  redirect(`/estimates/${id}?accepted=1`);
-}
-
-export async function createInvoiceFromEstimate(formData: FormData) {
-  const id = required(formData, "id", "見積ID");
-  if (demoMode) demoReturn(formData, `/estimates/${id}`);
-  const { supabase, userId } = await authed();
-  const { data: estimate, error } = await supabase.from("estimates").select("id,estimate_no,company_id,project_id,title,total_amount,billing_name,billing_postal_code,billing_address,memo,status").eq("id", id).single();
-  if (error) throw new Error(error.message);
-  if (!estimate.project_id) throw new Error("先に見積を案件へ反映してください。");
-  if (estimate.status !== "accepted") throw new Error("採用済みの見積から請求予定を作成してください。");
-  const { data: existingInvoice, error: existingError } = await supabase.from("project_invoices").select("id").eq("estimate_id", id).neq("status", "cancelled").limit(1).maybeSingle();
-  if (existingError) throw new Error(existingError.message);
-  if (existingInvoice) redirect(`/billing/${existingInvoice.id}/edit`);
-  const { data: itemRows, error: itemError } = await supabase.from("estimate_items").select("tax_rate").eq("estimate_id", id);
-  if (itemError) throw new Error(itemError.message);
-  const rates = Array.from(new Set((itemRows ?? []).map((x:any) => Number(x.tax_rate ?? 0))));
-  const taxRate = rates.length === 1 ? rates[0] : 0;
-  const { data: created, error: invoiceError } = await supabase.from("project_invoices").insert({
-    user_id: userId,
-    project_id: estimate.project_id,
-    company_id: estimate.company_id,
-    estimate_id: id,
-    title: `${estimate.title} 請求`,
-    status: "planned",
-    amount: Number(estimate.total_amount ?? 0),
-    scheduled_invoice_date: todayJstDate(),
-    line_description: estimate.title,
-    tax_rate: taxRate,
-    billing_name: estimate.billing_name,
-    billing_postal_code: estimate.billing_postal_code,
-    billing_address: estimate.billing_address,
-    memo: `${estimate.estimate_no ? `見積 ${estimate.estimate_no}` : `見積 ${id}`} より引継ぎ${rates.length > 1 ? "（複数税率のため請求書税率は0%で作成。税内訳は見積書を参照）" : ""}${estimate.memo ? `\n${estimate.memo}` : ""}`
-  }).select("id").single();
-  if (invoiceError) throw new Error(invoiceError.message);
-  invalidateBillingMutation(estimate.project_id);
-  revalidatePath(`/estimates/${id}`);
-  redirect(`/billing/${created.id}/edit`);
+export async function createInvoiceFromEstimate(_formData: FormData) {
+  throw new Error("注文・受注管理からMFへの請求予定を作成してください。");
 }

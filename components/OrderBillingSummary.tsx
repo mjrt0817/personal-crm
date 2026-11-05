@@ -1,0 +1,5 @@
+import Link from 'next/link';
+import {getAllOrderPlans,orderLabels} from '@/lib/orders';
+export default async function OrderBillingSummary({projectId}:{projectId?:string}){
+ const {orders,plans}=await getAllOrderPlans(projectId);return <section className="card" style={{marginBottom:18}}><div className="card-head"><h2>注文・受注からのMF請求</h2><Link className="button" href="/orders">注文・受注管理</Link></div><div className="card-body"><p className="muted">新しい受注の請求予定はこちらで管理します。請求書送付・入金確認はMFで行います。下段の従来の請求履歴とは別集計です。</p>{orders.length===0?<p>注文書はまだありません。見積から作成してください。</p>:orders.map(o=><div key={o.id} style={{marginBottom:14}}><Link href={`/orders/${o.id}`}><strong>{o.order_no} ／ {o.snapshot.estimate.title}</strong></Link><span className="badge">{orderLabels[o.status]}</span>{plans.filter(p=>p.order_id===o.id).map(p=><div key={p.id} className="small">{p.title}：{Number(p.expected_total).toLocaleString()}円 ／ {p.billing_date} ／ {p.status==='created'?`MF作成済み ${p.mf_billing_number||''}`:p.status==='planned'?'請求予定':p.status==='cancelled'?'取消':'作成結果を要確認'}</div>)}</div>)}</div></section>;
+}
