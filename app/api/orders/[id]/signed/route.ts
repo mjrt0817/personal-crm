@@ -1,0 +1,2 @@
+import {getOrder,orderSession} from '@/lib/orders';
+export async function GET(_request:Request,{params}:{params:Promise<{id:string}>}){const {id}=await params;const o=await getOrder(id);if(!o?.signed_path)return new Response('PDFが見つかりません',{status:404});const {db}=await orderSession();const {data,error}=await db.storage.from('signed-orders').createSignedUrl(o.signed_path,60);if(error||!data)return new Response('PDFを取得できません',{status:500});return new Response(null,{status:302,headers:{Location:data.signedUrl,'Cache-Control':'private, no-store'}});}

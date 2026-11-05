@@ -13,56 +13,6 @@
   --radius: 14px;
   --shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.08);
 }
-
-/* Expense entry and receipt management */
-.expense-page { max-width:1100px; margin:0 auto; }
-.expense-page .page-head p { margin-bottom:0; line-height:1.7; }
-.expense-toolbar { display:flex; flex-wrap:wrap; gap:8px; }
-.expense-section-title { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; }
-.expense-page .expense-section-title h2 { margin:0; }
-.expense-page .form-grid { align-items:start; }
-.expense-page .field { min-width:0; margin-bottom:0; }
-.expense-page .field input,.expense-page .field select,.expense-page .field textarea { min-width:0; min-height:44px; }
-.expense-page .field textarea { resize:vertical; }
-.expense-entry-actions { align-items:center; justify-content:space-between; gap:16px; }
-.expense-entry-actions .button { min-width:150px; }
-.expense-records { margin-top:24px; }
-.expense-details summary,.expense-guidance summary { cursor:pointer; color:var(--accent); font-size:13px; font-weight:700; padding:10px 0; }
-.expense-details-body { padding-top:10px; }
-.expense-details-body .expense-toolbar { justify-content:flex-end; margin-top:14px; }
-.expense-filter { padding-bottom:18px; border-bottom:1px solid var(--line); }
-.expense-filter > .expense-details { margin-top:4px; }
-.expense-filter-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
-.expense-results-summary { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:8px; padding:20px 0 16px; }
-.expense-results-summary strong { font-size:20px; margin-left:8px; font-variant-numeric:tabular-nums; }
-.expense-list { display:grid; gap:12px; }
-.expense-record { border:1px solid var(--line); border-radius:12px; padding:18px; min-width:0; }
-.expense-record-heading { display:flex; justify-content:space-between; align-items:center; gap:16px; }
-.expense-record-heading > div { min-width:0; }
-.expense-record-heading h3 { margin:6px 0 0; font-size:17px; overflow-wrap:anywhere; }
-.expense-amount { font-size:23px; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.expense-amount span { font-size:13px; margin-left:4px; }
-.expense-record-meta { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 4px; }
-.expense-memo { white-space:pre-wrap; overflow-wrap:anywhere; margin:12px 0; line-height:1.7; }
-.expense-receipts { list-style:none; margin:12px 0; padding:0; display:grid; gap:8px; }
-.expense-receipts li { display:flex; flex-wrap:wrap; gap:10px; align-items:baseline; }
-.expense-receipts a { color:var(--accent); overflow-wrap:anywhere; }
-.expense-record-id summary { color:var(--muted); font-weight:400; font-size:12px; }
-.expense-record-id p { overflow-wrap:anywhere; margin:0; }
-.expense-empty { text-align:center; padding:30px 12px; line-height:1.7; }
-.expense-empty p { margin:8px 0 0; }
-.expense-guidance { margin-top:18px; padding:0 4px; }
-.expense-guidance > div { max-width:850px; line-height:1.8; padding-top:8px; }
-.expense-guidance .link-text { margin:0; }
-@media(max-width:760px) {
-  .expense-page .page-head { flex-direction:column; }
-  .expense-page .form-grid.two,.expense-page .form-grid.three { grid-template-columns:1fr; }
-  .expense-page .expense-entry-actions { position:static; flex-direction:column; align-items:stretch; }
-  .expense-record { padding:14px; }
-  .expense-record-heading { align-items:flex-start; }
-  .expense-amount { font-size:20px; }
-  .expense-details-body .expense-toolbar .button { width:100%; }
-}
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
 body { font-family: Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif; }
@@ -740,3 +690,16 @@ button.task-check.done { background:var(--success); }
   .contract-check-row { align-items:flex-start; padding:14px; }
   .contract-check-row > strong { white-space:nowrap; }
 }
+
+/* Ver.3.4 注文・受注・MF請求連携 */
+.order-lines th:first-child,.order-lines td:first-child { width:36%; overflow-wrap:anywhere; }
+.order-lines th:nth-child(2),.order-lines td:nth-child(2) { width:9%; }
+.order-lines th:nth-child(3),.order-lines td:nth-child(3) { width:8%; text-align:center; }
+.order-lines th:nth-child(4),.order-lines td:nth-child(4) { width:18%; }
+.order-lines th:nth-child(5),.order-lines td:nth-child(5) { width:9%; text-align:right; }
+.order-lines th:nth-child(6),.order-lines td:nth-child(6) { width:20%; text-align:right; }
+.order-paper .invoice-total-box { flex-wrap:wrap; gap:8px; }
+.order-paper .invoice-notes,.order-lines tr { break-inside:avoid; }
+.order-paper .invoice-issuer { overflow-wrap:anywhere; }
+.order-plan-items { grid-template-columns:minmax(130px,3fr) repeat(4,minmax(65px,1fr)); margin-bottom:12px; }
+@media(max-width:760px) { .order-plan-items { grid-template-columns:1fr 1fr; } .order-plan-items > :first-child { grid-column:1 / -1; } }

@@ -1,3 +1,5 @@
+import { mfConnectionStatus } from "@/lib/moneyforward";
+import { disconnectMf } from "@/lib/order-actions";
 import GoogleCalendarConnectButton from "@/components/GoogleCalendarConnectButton";
 import SubmitButton from "@/components/SubmitButton";
 import { disconnectGoogleCalendar, saveActionPreferences, saveInvoiceSettings } from "@/lib/actions";
@@ -11,6 +13,7 @@ function formatDateTime(value?: string) {
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
+  const mfConnected = await mfConnectionStatus();
   const calendar = typeof params.calendar === "string" ? params.calendar : "";
   const actionRules = typeof params.action_rules === "string" ? params.action_rules : "";
   const invoiceSettingsSaved = typeof params.invoice_settings === "string" ? params.invoice_settings : "";
@@ -26,6 +29,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {actionRules === "saved" && <div className="notice success-notice">優先アクションの判定条件を保存しました。</div>}
       {invoiceSettingsSaved === "saved" && <div className="notice success-notice">請求書・見積書の設定を保存しました。</div>}
 
+      <section className="card" id="moneyforward" style={{ marginBottom: 18 }}>
+        <div className="card-head"><h2>マネーフォワード クラウド請求書</h2><span className="badge">{mfConnected ? "接続済み" : "未接続"}</span></div>
+        <div className="card-body"><p>PersonalCRMで見積・注文・受注・請求予定を管理し、MFで請求書発行・送付・入金・会計処理を行います。</p>
+        {params.mf === "connected" && <div className="notice success-notice">MFとの接続が完了しました。</div>}
+        {params.mf === "error" && <div className="notice error-notice">MFへ接続できませんでした。連携アプリの設定・環境変数を確認し、接続をやり直してください。</div>}
+        <div className="row-actions"><a className="button primary" href="/api/mf/connect">{mfConnected ? "MFへ再接続" : "MFへ接続"}</a>{mfConnected && <form action={disconnectMf}><button className="button danger">接続を解除</button></form>}<a className="button" href="https://invoice.moneyforward.com/" target="_blank" rel="noreferrer">MFを開く</a></div>
+        <p className="small muted">パーソナルミニ：取引先15件、API帳票作成は月100件まで。帳票CSV取り込み・毎月自動作成・合算請求は対象外です。初回はMF側の発行者・振込先・税の設定を確認してください。</p></div>
+      </section>
+
       <section className="card" style={{ marginBottom: 18 }}>
         <div className="card-head"><h2>Google Workspace</h2><span className={`badge ${status.connected ? "green" : ""}`}>{status.connected ? "接続済み" : "未接続"}</span></div>
         <div className="card-body">
@@ -33,7 +45,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div className="kv"><div className="k">状態</div><div>{status.connected ? "接続済み" : "未接続"}</div></div>
           <div className="kv"><div className="k">Googleアカウント</div><div>{status.googleEmail ?? "—"}</div></div>
           <div className="kv"><div className="k">Calendar</div><div>予定の作成・更新・削除＋アプリ利用中の約5分間隔自動同期</div></div>
-          <div className="kv"><div className="k">Drive</div><div>案件フォルダのメタデータ読み取り・経費領収書のアップロード（drive.file権限で再接続が必要）。領収書本文はDriveに保存します。</div></div>
+          <div className="kv"><div className="k">Drive</div><div>案件フォルダのメタデータ読み取り（ファイル本文は保存しません）</div></div>
           <div className="kv"><div className="k">Gmail</div><div>取引先・担当者メールアドレスで関連メールを検索し、件名・送受信者・日時・本文snippetを案件へ保存</div></div>
           <div className="kv"><div className="k">接続日時</div><div>{formatDateTime(status.connectedAt)}</div></div>
           <div className="kv"><div className="k">Calendar最終同期</div><div>{formatDateTime(status.lastSyncAt)}</div></div>

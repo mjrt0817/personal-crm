@@ -1,4 +1,5 @@
 import Link from "next/link";
+import OrderBillingSummary from "@/components/OrderBillingSummary";
 import { notFound } from "next/navigation";
 import BillingStatusBadge from "@/components/BillingStatusBadge";
 import MetricCard from "@/components/MetricCard";
@@ -18,7 +19,7 @@ export default async function ProjectBillingPage({params}:{params:Promise<{id:st
       <Link href={`/projects/${id}/billing/new`} className="button primary">＋ 請求予定を追加</Link>
     </div>
 
-    <div className="grid-4 billing-kpis">
+    <OrderBillingSummary projectId={id}/><p className="small muted">以下は従来のCRM請求データの集計・履歴です（MF連携分を含みません）。</p><div className="grid-4 billing-kpis">
       <MetricCard label="案件予定売上" value={yen(billing.projectRevenue)} note="受注・予定額"/>
       <MetricCard label="請求前" value={yen(billing.plannedAmount + billing.suggestedAmount)} note={`予定登録 ${yen(billing.plannedAmount)} / 未割当 ${yen(billing.suggestedAmount)}`}/>
       <MetricCard label="請求済累計" value={yen(billing.issuedAmount)} note={`未入金 ${yen(billing.outstandingAmount)}${billing.overdueCount ? ` / 超過 ${yen(billing.overdueAmount)}` : ""}`}/>
