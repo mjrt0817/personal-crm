@@ -703,3 +703,42 @@ button.task-check.done { background:var(--success); }
 .order-paper .invoice-issuer { overflow-wrap:anywhere; }
 .order-plan-items { grid-template-columns:minmax(130px,3fr) repeat(4,minmax(65px,1fr)); margin-bottom:12px; }
 @media(max-width:760px) { .order-plan-items { grid-template-columns:1fr 1fr; } .order-plan-items > :first-child { grid-column:1 / -1; } }
+
+/* Ver.3.5 注文条件テンプレート・納品検収 */
+.check-editor-row { display:grid; grid-template-columns:90px minmax(0,1fr) auto; gap:8px; align-items:start; margin:12px 0; }
+.check-editor-row textarea { width:100%; min-width:0; }
+.acceptance-item { padding:14px 0; border-bottom:1px solid var(--line); }
+.acceptance-item > strong { display:block; margin-bottom:10px; }
+.acceptance-doc-head h1 { font-size:23px; letter-spacing:.08em; text-align:center; margin:0 0 20px; }
+.acceptance-doc-head p,.acceptance-doc-note { font-size:11px; line-height:1.7; white-space:pre-wrap; }
+.acceptance-doc-table { width:100%; border-collapse:collapse; table-layout:fixed; margin-top:18px; }
+.acceptance-doc-table th,.acceptance-doc-table td { border:1px solid #9ca3af; padding:7px; font-size:10px; white-space:pre-wrap; overflow-wrap:anywhere; vertical-align:top; }
+.acceptance-doc-table th { background:#f3f4f6; }
+.acceptance-doc-table th:nth-child(1) { width:10%; }
+.acceptance-doc-table th:nth-child(2) { width:45%; }
+.acceptance-doc-table th:nth-child(3) { width:15%; }
+.acceptance-doc-table th:nth-child(4) { width:30%; }
+.acceptance-doc-table tr { break-inside:avoid; }
+.acceptance-signature { min-height:48px; border:1px solid #d7dce3; padding:12px; margin-top:14px; }
+.order-attachment { margin-top:20px; }
+@media(max-width:760px){ .check-editor-row { grid-template-columns:1fr auto; } .check-editor-row textarea { grid-column:1 / -1; grid-row:2; } }
+@media print { .order-attachment { break-before:page; margin-top:0; } .acceptance-doc-table thead { display:table-header-group; } .order-extra-terms { break-inside:auto !important; } .order-extra-terms strong { break-after:avoid; } }
+@media print {
+ @page order-sheet { size:A4 portrait; margin:14mm; }
+ .order-paper,.acceptance-paper { page:order-sheet; width:auto; min-height:0; padding:0; box-shadow:none; }
+ .order-paper .invoice-notes { break-inside:auto; }
+ .order-paper .invoice-notes strong { break-after:avoid; }
+ .acceptance-signature { break-inside:avoid; }
+}
+@media print { .order-paper .order-sign-off { break-inside:avoid; } }
+.acceptance-doc-head p { margin:5px 0; }
+.acceptance-doc-note { margin:8px 0; }
+.acceptance-doc-table td,.acceptance-doc-table th { padding:5px; font-size:9px; line-height:1.4; }
+.criteria-doc-table th:first-child { width:12%; }
+.criteria-doc-table th:nth-child(2) { width:88%; }
+@media print {
+ .order-condition-group { break-inside:avoid; }
+ .order-condition-group > strong { display:block; }
+ .acceptance-paper .invoice-notes { margin-top:14px; font-size:10px; line-height:1.5; break-inside:avoid; }
+}
+.acceptance-doc-table tbody tr:last-child td { border-bottom:1px solid #9ca3af; }
