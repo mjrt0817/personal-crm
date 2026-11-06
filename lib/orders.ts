@@ -3,8 +3,10 @@ import { demoOrders } from './order-demo';
 import { createClient } from '@/lib/supabase/server';
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 import type { InvoicePartySnapshot } from '@/lib/types';
+import type { OrderConditions,AcceptanceCheck } from './order-templates';
 import type { OrderItem } from './order-domain';
-export type SalesOrder = {
+export type SalesOrder = Partial<Omit<OrderConditions,'checklist'>> & {
+ checklist_template?:AcceptanceCheck[];
  id:string;user_id:string;estimate_id:string;company_id:string;project_id:string|null;order_no:string;status:'created'|'signing'|'confirmed'|'cancelled';
  snapshot:{estimate:{title:string;estimate_no:string;total_amount:number;subtotal:number;tax_amount:number;terms?:string};issuer:InvoicePartySnapshot;customer:InvoicePartySnapshot;items:OrderItem[]};
  delivery_date:string;delivery_place:string;payment_terms:string;inspection_terms:string;signed_path:string|null;signed_at:string|null;signed_sha256:string|null;signature_reference:string|null;created_at:string;
@@ -24,4 +26,10 @@ export async function getEstimateOrders(id:string){if(demoMode)return [];const {
 export const orderLabels={created:'注文書作成済み',signing:'署名依頼済み',confirmed:'受注確定',cancelled:'取消'};
 export async function getAllOrderPlans(projectId?:string){
  const orders=(await getOrders()).filter(o=>!projectId||o.project_id===projectId);if(!orders.length||demoMode)return {orders,plans:[] as BillingPlan[]};const {db}=await orderSession();const {data,error}=await db.from('order_billing_plans').select('*').in('order_id',orders.map(o=>o.id)).order('billing_date');if(error)throw new Error(error.message);return {orders,plans:data as BillingPlan[]};
+}
+
+export type OrderAcceptance={order_id:string;items:AcceptanceCheck[];requested_date:string|null;published_date:string|null;completed_date:string|null;approved_by:string|null;approval_evidence:string|null;notes:string;revision:number};
+export async function getAcceptance(id:string):Promise<OrderAcceptance|null>{
+ if(demoMode){const o=demoOrders.find(x=>x.id===id&&x.status==='confirmed');return o?{order_id:id,items:(o.checklist_template||[]).map((x,i)=>({...x,status:i<2?'ok':i===2?'issue':'pending',note:i===2?'スマートフォンの文字サイズを最終確認':''})),requested_date:'2026-11-05',published_date:null,completed_date:null,approved_by:null,approval_evidence:null,notes:'デモ表示（保存はできません）',revision:1}:null;}
+ const {db}=await orderSession();const {data,error}=await db.from('order_acceptances').select('*').eq('order_id',id).maybeSingle();if(error)throw new Error(error.message);return data as OrderAcceptance|null;
 }

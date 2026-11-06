@@ -14,7 +14,7 @@ Ver.3.3＋build-hotfix＋estimate-draft-hotfixを統合した更新版です。
 1. 現在のコード・Supabaseデータをバックアップします。
 2. Supabase SQL Editorで `supabase/migrations/018_orders_and_moneyforward.sql` を1回実行します。既存の001〜017適用済みが前提です。018はトランザクション内で実行します。
 3. この更新版のコードで既存リポジトリを更新します。既存の `.env.local` とVercelの環境変数を維持してください。`node_modules` や `.next` は同梱していません。
-4. `npm ci` → `npm test` → `npm run build` を実行し、通常の手順でVercelへ反映します。
+4. `pnpm install --frozen-lockfile` → `pnpm test` → `pnpm run build` を実行し、通常の手順でVercelへ反映します。pnpmはpackage.json指定の10.12.1を使用します。Vercelのpnpmビルドエラー修正は `README-PNPM-HOTFIX.md` を参照してください。
 5. 本番では既存どおり `NEXT_PUBLIC_DEMO_MODE=false` を設定します。trueではサンプル注文書が表示され、保存はできません。
 
 018では本人専用の注文・請求予定テーブル、暗号化したMF認証情報テーブル、非公開 `signed-orders` バケットを作成します。署名済みPDFは画面上4MBまで。新規構築でも既存の導入手順を完了した後、018を実行してください。

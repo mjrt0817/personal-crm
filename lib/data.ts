@@ -1405,7 +1405,10 @@ export async function getEstimates(): Promise<Estimate[]> {
 }
 
 export async function getEstimateDetail(id: string): Promise<Estimate | null> {
-  if (demoMode) return null;
+  if (demoMode) return id === "demo-estimate" ? {
+    id,companyId:"demo-company",companyName:"株式会社サンプル",estimateNo:"EST-DEMO0001",title:"コーポレートサイト制作・公開支援",status:"sent",issueDate:"2026-11-05",validUntil:"2099-12-31",subtotal:100000,taxAmount:10000,totalAmount:110000,
+    items:[{description:"Webサイト制作",quantity:1,unit:"式",unitPrice:100000,taxRate:10,lineSubtotal:100000,taxAmount:10000,sortOrder:0}]
+  } : null;
   const supabase = await createClient();
   const [estimateResult, itemsResult] = await Promise.all([
     supabase.from("estimates").select(ESTIMATE_SELECT).eq("id", id).maybeSingle(),

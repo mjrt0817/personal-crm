@@ -4,12 +4,14 @@ import { redirect } from 'next/navigation';
 import { createHash,randomUUID } from 'node:crypto';
 import { getOrder,orderSession } from './orders';
 import { parseOrderItems,mfPayload,validMfId,todayJst } from './order-domain';
+import { readConditions,validateChecks } from './order-templates';
 import { mfAccess,mfRequest,mfDepartments } from './moneyforward';
 function value(f:FormData,k:string){return String(f.get(k)||'').trim();}
 function changed(id:string){revalidatePath('/orders');revalidatePath(`/orders/${id}`);revalidatePath('/projects');revalidatePath('/pipeline');revalidatePath('/billing');}
 async function runRpc(name:string,args:Record<string,unknown>){const {db}=await orderSession();const {data,error}=await db.rpc(name,args);if(error)throw new Error(error.message);return data;}
 export async function createSalesOrder(f:FormData){
- const id=await runRpc('create_sales_order',{p_estimate:value(f,'estimate_id'),p_delivery:value(f,'delivery_date'),p_place:value(f,'delivery_place'),p_payment:value(f,'payment_terms'),p_inspection:value(f,'inspection_terms')});changed(id);revalidatePath(`/estimates/${value(f,'estimate_id')}`);redirect(`/orders/${id}`);
+ if(f.get('conditions_checked')!=='on')throw new Error('注文条件と確認項目を確認してください。');
+ const id=await runRpc('create_sales_order_with_conditions',{p_estimate:value(f,'estimate_id'),p_delivery:value(f,'delivery_date'),p_place:value(f,'delivery_place'),p_payment:value(f,'payment_terms'),p_inspection:value(f,'inspection_terms'),p_conditions:readConditions(f)});changed(id);revalidatePath(`/estimates/${value(f,'estimate_id')}`);redirect(`/orders/${id}`);
 }
 export async function startSigning(f:FormData){const id=value(f,'id');if(f.get('sent_confirmed')!=='on')throw new Error('締結ぱっとで署名依頼を送付したことを確認してください。');await runRpc('transition_sales_order',{p_id:id,p_action:'signing'});changed(id);}
 export async function cancelSalesOrder(f:FormData){const id=value(f,'id');await runRpc('transition_sales_order',{p_id:id,p_action:'cancel'});changed(id);}
@@ -54,3 +56,14 @@ export async function reconcileOrderPlan(f:FormData){
 }
 export async function resetOrderPlan(f:FormData){if(f.get('absence_confirmed')!=='on')throw new Error('MFに請求書が作成されていないことを確認してください。');await runRpc('update_order_plan',{p_id:value(f,'plan_id'),p_action:'reset'});changed(value(f,'order_id'));}
 export async function disconnectMf(){const {db,userId}=await orderSession();const {error}=await db.from('mf_connections').delete().eq('user_id',userId);if(error)throw new Error(error.message);revalidatePath('/settings');}
+
+export async function startAcceptance(f:FormData){
+ const id=value(f,'order_id');let checks=null;
+ if(value(f,'checklist_json')){if(f.get('legacy_confirmed')!=='on')throw new Error('既存注文書の条件を変更しないことを確認してください。');checks=validateChecks(JSON.parse(value(f,'checklist_json')),true);}
+ await runRpc('start_order_acceptance',{p_order:id,p_items:checks});changed(id);revalidatePath(`/orders/${id}/acceptance`);redirect(`/orders/${id}/acceptance`);
+}
+export async function saveAcceptance(f:FormData){
+ const id=value(f,'order_id');const complete=f.get('complete')==='yes';if(complete&&f.get('approval_checked')!=='on')throw new Error('顧客の明示的な承認を確認してください。');
+ let raw:unknown;try{raw=JSON.parse(value(f,'items_json'));}catch{throw new Error('チェック結果を確認してください。');}
+ await runRpc('save_order_acceptance',{p_order:id,p_revision:Number(value(f,'revision')),p_items:validateChecks(raw),p_requested:value(f,'requested_date')||null,p_published:value(f,'published_date')||null,p_complete:complete,p_date:value(f,'completed_date')||null,p_approver:value(f,'approved_by'),p_evidence:value(f,'approval_evidence'),p_notes:value(f,'notes')});changed(id);revalidatePath(`/orders/${id}/acceptance`);revalidatePath(`/acceptance-documents/${id}`);redirect(`/orders/${id}/acceptance?saved=1`);
+}

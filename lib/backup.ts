@@ -21,7 +21,8 @@ export const BACKUP_TABLES = [
   "estimate_items",
   "invoice_settings",
   "sales_orders",
-  "order_billing_plans"
+  "order_billing_plans",
+  "order_acceptances"
 ] as const;
 
 export async function getBackupPayload() {
@@ -40,7 +41,7 @@ export async function getBackupPayload() {
 
   return {
     format: "personal-crm-backup",
-    version: "3.4",
+    version: "3.5",
     exported_at: new Date().toISOString(),
     note: "OAuth tokens / secrets and signed PDF bytes are excluded. Signed PDFs must be backed up separately.",
     tables: Object.fromEntries(entries)
